@@ -140,9 +140,7 @@ exports.Prisma.SortOrder = {
 exports.Prisma.Sales_OrderOrderByRelevanceFieldEnum = {
   id: 'id',
   product_name: 'product_name',
-  customer_name: 'customer_name',
-  finish_date: 'finish_date',
-  delivery_date: 'delivery_date'
+  customer_name: 'customer_name'
 };
 
 

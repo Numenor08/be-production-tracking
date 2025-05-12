@@ -20,8 +20,8 @@ model Sales_Order {
   product_qty   Int
   price         Int
   customer_name String
-  finish_date   String
-  delivery_date String
+  finish_date   DateTime
+  delivery_date DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 }

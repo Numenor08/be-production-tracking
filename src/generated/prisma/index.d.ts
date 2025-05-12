@@ -889,8 +889,8 @@ export namespace Prisma {
     product_qty: number | null
     price: number | null
     customer_name: string | null
-    finish_date: string | null
-    delivery_date: string | null
+    finish_date: Date | null
+    delivery_date: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -901,8 +901,8 @@ export namespace Prisma {
     product_qty: number | null
     price: number | null
     customer_name: string | null
-    finish_date: string | null
-    delivery_date: string | null
+    finish_date: Date | null
+    delivery_date: Date | null
     createdAt: Date | null
     updatedAt: Date | null
   }
@@ -1060,8 +1060,8 @@ export namespace Prisma {
     product_qty: number
     price: number
     customer_name: string
-    finish_date: string
-    delivery_date: string
+    finish_date: Date
+    delivery_date: Date
     createdAt: Date
     updatedAt: Date
     _count: Sales_OrderCountAggregateOutputType | null
@@ -1122,8 +1122,8 @@ export namespace Prisma {
       product_qty: number
       price: number
       customer_name: string
-      finish_date: string
-      delivery_date: string
+      finish_date: Date
+      delivery_date: Date
       createdAt: Date
       updatedAt: Date
     }, ExtArgs["result"]["sales_Order"]>
@@ -1500,8 +1500,8 @@ export namespace Prisma {
     readonly product_qty: FieldRef<"Sales_Order", 'Int'>
     readonly price: FieldRef<"Sales_Order", 'Int'>
     readonly customer_name: FieldRef<"Sales_Order", 'String'>
-    readonly finish_date: FieldRef<"Sales_Order", 'String'>
-    readonly delivery_date: FieldRef<"Sales_Order", 'String'>
+    readonly finish_date: FieldRef<"Sales_Order", 'DateTime'>
+    readonly delivery_date: FieldRef<"Sales_Order", 'DateTime'>
     readonly createdAt: FieldRef<"Sales_Order", 'DateTime'>
     readonly updatedAt: FieldRef<"Sales_Order", 'DateTime'>
   }
@@ -1865,9 +1865,7 @@ export namespace Prisma {
   export const Sales_OrderOrderByRelevanceFieldEnum: {
     id: 'id',
     product_name: 'product_name',
-    customer_name: 'customer_name',
-    finish_date: 'finish_date',
-    delivery_date: 'delivery_date'
+    customer_name: 'customer_name'
   };
 
   export type Sales_OrderOrderByRelevanceFieldEnum = (typeof Sales_OrderOrderByRelevanceFieldEnum)[keyof typeof Sales_OrderOrderByRelevanceFieldEnum]
@@ -1918,8 +1916,8 @@ export namespace Prisma {
     product_qty?: IntFilter<"Sales_Order"> | number
     price?: IntFilter<"Sales_Order"> | number
     customer_name?: StringFilter<"Sales_Order"> | string
-    finish_date?: StringFilter<"Sales_Order"> | string
-    delivery_date?: StringFilter<"Sales_Order"> | string
+    finish_date?: DateTimeFilter<"Sales_Order"> | Date | string
+    delivery_date?: DateTimeFilter<"Sales_Order"> | Date | string
     createdAt?: DateTimeFilter<"Sales_Order"> | Date | string
     updatedAt?: DateTimeFilter<"Sales_Order"> | Date | string
   }
@@ -1946,8 +1944,8 @@ export namespace Prisma {
     product_qty?: IntFilter<"Sales_Order"> | number
     price?: IntFilter<"Sales_Order"> | number
     customer_name?: StringFilter<"Sales_Order"> | string
-    finish_date?: StringFilter<"Sales_Order"> | string
-    delivery_date?: StringFilter<"Sales_Order"> | string
+    finish_date?: DateTimeFilter<"Sales_Order"> | Date | string
+    delivery_date?: DateTimeFilter<"Sales_Order"> | Date | string
     createdAt?: DateTimeFilter<"Sales_Order"> | Date | string
     updatedAt?: DateTimeFilter<"Sales_Order"> | Date | string
   }, "id">
@@ -1978,8 +1976,8 @@ export namespace Prisma {
     product_qty?: IntWithAggregatesFilter<"Sales_Order"> | number
     price?: IntWithAggregatesFilter<"Sales_Order"> | number
     customer_name?: StringWithAggregatesFilter<"Sales_Order"> | string
-    finish_date?: StringWithAggregatesFilter<"Sales_Order"> | string
-    delivery_date?: StringWithAggregatesFilter<"Sales_Order"> | string
+    finish_date?: DateTimeWithAggregatesFilter<"Sales_Order"> | Date | string
+    delivery_date?: DateTimeWithAggregatesFilter<"Sales_Order"> | Date | string
     createdAt?: DateTimeWithAggregatesFilter<"Sales_Order"> | Date | string
     updatedAt?: DateTimeWithAggregatesFilter<"Sales_Order"> | Date | string
   }
@@ -1990,8 +1988,8 @@ export namespace Prisma {
     product_qty: number
     price: number
     customer_name: string
-    finish_date: string
-    delivery_date: string
+    finish_date: Date | string
+    delivery_date: Date | string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -2002,8 +2000,8 @@ export namespace Prisma {
     product_qty: number
     price: number
     customer_name: string
-    finish_date: string
-    delivery_date: string
+    finish_date: Date | string
+    delivery_date: Date | string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -2014,8 +2012,8 @@ export namespace Prisma {
     product_qty?: IntFieldUpdateOperationsInput | number
     price?: IntFieldUpdateOperationsInput | number
     customer_name?: StringFieldUpdateOperationsInput | string
-    finish_date?: StringFieldUpdateOperationsInput | string
-    delivery_date?: StringFieldUpdateOperationsInput | string
+    finish_date?: DateTimeFieldUpdateOperationsInput | Date | string
+    delivery_date?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -2026,8 +2024,8 @@ export namespace Prisma {
     product_qty?: IntFieldUpdateOperationsInput | number
     price?: IntFieldUpdateOperationsInput | number
     customer_name?: StringFieldUpdateOperationsInput | string
-    finish_date?: StringFieldUpdateOperationsInput | string
-    delivery_date?: StringFieldUpdateOperationsInput | string
+    finish_date?: DateTimeFieldUpdateOperationsInput | Date | string
+    delivery_date?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -2038,8 +2036,8 @@ export namespace Prisma {
     product_qty: number
     price: number
     customer_name: string
-    finish_date: string
-    delivery_date: string
+    finish_date: Date | string
+    delivery_date: Date | string
     createdAt?: Date | string
     updatedAt?: Date | string
   }
@@ -2050,8 +2048,8 @@ export namespace Prisma {
     product_qty?: IntFieldUpdateOperationsInput | number
     price?: IntFieldUpdateOperationsInput | number
     customer_name?: StringFieldUpdateOperationsInput | string
-    finish_date?: StringFieldUpdateOperationsInput | string
-    delivery_date?: StringFieldUpdateOperationsInput | string
+    finish_date?: DateTimeFieldUpdateOperationsInput | Date | string
+    delivery_date?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }
@@ -2062,8 +2060,8 @@ export namespace Prisma {
     product_qty?: IntFieldUpdateOperationsInput | number
     price?: IntFieldUpdateOperationsInput | number
     customer_name?: StringFieldUpdateOperationsInput | string
-    finish_date?: StringFieldUpdateOperationsInput | string
-    delivery_date?: StringFieldUpdateOperationsInput | string
+    finish_date?: DateTimeFieldUpdateOperationsInput | Date | string
+    delivery_date?: DateTimeFieldUpdateOperationsInput | Date | string
     createdAt?: DateTimeFieldUpdateOperationsInput | Date | string
     updatedAt?: DateTimeFieldUpdateOperationsInput | Date | string
   }

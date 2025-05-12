@@ -1,16 +1,16 @@
-import express from 'express';
-import dotenv from 'dotenv';
-import salesOrderRoute from './routes/salesOrder.route';
+import express from 'express'
+import dotenv from 'dotenv'
+import salesOrderRoute from './routes/salesOrder.route'
 
-dotenv.config();
-const app = express();
+dotenv.config()
+const app = express()
 
-const port = process.env.PORT;
+const port = process.env.PORT
 
-app.use(express.json());
+app.use(express.json())
 
-app.use('/sales-order', salesOrderRoute);
+app.use('/sales-order', salesOrderRoute)
 
 app.listen(port, () => {
-  console.log(`Server is running at http://localhost:${port}`);
-});
+    console.log(`Server is running at http://localhost:${port}`)
+})
