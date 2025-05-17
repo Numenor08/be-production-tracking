@@ -31,23 +31,70 @@ const getSalesOrderById = async (req: Request, res: Response) => {
     }
 }
 
-const createSalesOrder = async (req: Request, res: Response) => {
-    const data = req.body as SalesOrderInput
+export const createSalesOrder = async (req: Request, res: Response) => {
+    const {
+        id,
+        productId,
+        product_qty,
+        price,
+        customer_name,
+        finish_date,
+        delivery_date,
+    } = req.body
 
     try {
-        const created = await prisma.sales_Order.create({
+        const productMaterials = await prisma.productMaterial.findMany({
+            where: { productId },
+            include: { material: true },
+        })
+
+        for (const pm of productMaterials) {
+            const totalNeeded = pm.stock_needed * product_qty
+
+            if (pm.material.stock < totalNeeded) {
+                res.status(400).json({
+                    error: `Stok material ${pm.material.material_name} tidak cukup. Dibutuhkan: ${totalNeeded}, tersedia: ${pm.material.stock}`,
+                })
+            }
+        }
+
+        const newSalesOrder = await prisma.sales_Order.create({
             data: {
-                product_name: data.product_name,
-                product_qty: data.product_qty,
-                price: data.price,
-                customer_name: data.customer_name,
-                finish_date: new Date(data.finish_date),
-                delivery_date: new Date(data.delivery_date),
+                id,
+                product_qty,
+                customer_name,
+                finish_date: new Date(finish_date),
+                delivery_date: new Date(delivery_date),
             },
         })
-        res.status(201).json(created)
+
+        for (const pm of productMaterials) {
+            const totalNeeded = pm.stock_needed * product_qty
+
+            await prisma.material.update({
+                where: { id: pm.materialId },
+                data: {
+                    stock: { decrement: totalNeeded },
+                },
+            })
+        }
+
+        const created = await prisma.salesOrderProduct.create({
+            data: {
+                salesOrderId: newSalesOrder.id,
+                productId,
+                product_qty: newSalesOrder.product_qty,
+                price,
+            },
+        })
+
+        res.status(201).json({
+            salesOrder: newSalesOrder,
+            salesOrderProduct: created,
+        })
     } catch (error) {
-        res.status(500).json({ error: 'Failed to create sales order' })
+        console.error(error)
+        res.status(500).json({ error: 'Gagal membuat sales order' })
     }
 }
 

@@ -1,8 +1,23 @@
 export interface SalesOrderInput {
-    product_name: string;
-    product_qty: number;
-    price: number;
-    customer_name: string;
-    finish_date: Date | string;
-    delivery_date: Date | string;
-  }
+    price: number
+    customer_name: string
+    finish_date: Date | string
+    delivery_date: Date | string
+}
+
+export interface MaterialInput {
+    material_name: string
+    price: number
+    stock: number
+}
+
+export interface ProductInput {
+    product_name: string
+    price: number
+}
+
+export interface ProductMaterialInput {
+    productId: string
+    materialId: string
+    stock_needed: number
+}

@@ -16,12 +16,70 @@ datasource db {
 
 model Sales_Order {
   id            String   @id @default(cuid())
-  product_name  String
-  product_qty   Int
-  price         Int
   customer_name String
+  product_qty   Int
   finish_date   DateTime
   delivery_date DateTime
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+
+  products SalesOrderProduct[]
+  spk      SPK?                @relation(fields: [spkId], references: [id])
+  spkId    String?             @unique
+}
+
+model SPK {
+  id          String       @id @default(cuid())
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  Sales_Order Sales_Order?
+}
+
+model Material {
+  id            String   @id @default(cuid())
+  material_name String
+  price         Int
+  stock         Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  products ProductMaterial[]
+}
+
+model Product {
+  id           String   @id @default(cuid())
+  product_name String
+  price        Int
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  materials   ProductMaterial[]
+  salesOrders SalesOrderProduct[]
+}
+
+model ProductMaterial {
+  id        String  @id @default(cuid())
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+
+  material   Material @relation(fields: [materialId], references: [id])
+  materialId String
+
+  stock_needed Int
+
+  @@unique([productId, materialId])
+}
+
+model SalesOrderProduct {
+  id           String      @id @default(cuid())
+  salesOrder   Sales_Order @relation(fields: [salesOrderId], references: [id])
+  salesOrderId String
+
+  product   Product @relation(fields: [productId], references: [id])
+  productId String
+
+  product_qty Int
+  price       Int
+
+  @@unique([salesOrderId, productId])
 }

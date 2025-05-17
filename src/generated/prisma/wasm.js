@@ -20,12 +20,12 @@ exports.Prisma = Prisma
 exports.$Enums = {}
 
 /**
- * Prisma Client JS version: 6.7.0
- * Query Engine version: 3cff47a7f5d65c3ea74883f1d736e41d68ce91ed
+ * Prisma Client JS version: 6.8.1
+ * Query Engine version: 2060c79ba17c6bb9f5823312b6f6b7f4a845738e
  */
 Prisma.prismaVersion = {
-  client: "6.7.0",
-  engine: "3cff47a7f5d65c3ea74883f1d736e41d68ce91ed"
+  client: "6.8.1",
+  engine: "2060c79ba17c6bb9f5823312b6f6b7f4a845738e"
 }
 
 Prisma.PrismaClientKnownRequestError = () => {
@@ -122,14 +122,51 @@ exports.Prisma.TransactionIsolationLevel = makeStrictEnum({
 
 exports.Prisma.Sales_OrderScalarFieldEnum = {
   id: 'id',
-  product_name: 'product_name',
-  product_qty: 'product_qty',
-  price: 'price',
   customer_name: 'customer_name',
+  product_qty: 'product_qty',
   finish_date: 'finish_date',
   delivery_date: 'delivery_date',
   createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  spkId: 'spkId'
+};
+
+exports.Prisma.SPKScalarFieldEnum = {
+  id: 'id',
+  createdAt: 'createdAt',
   updatedAt: 'updatedAt'
+};
+
+exports.Prisma.MaterialScalarFieldEnum = {
+  id: 'id',
+  material_name: 'material_name',
+  price: 'price',
+  stock: 'stock',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ProductScalarFieldEnum = {
+  id: 'id',
+  product_name: 'product_name',
+  price: 'price',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt'
+};
+
+exports.Prisma.ProductMaterialScalarFieldEnum = {
+  id: 'id',
+  productId: 'productId',
+  materialId: 'materialId',
+  stock_needed: 'stock_needed'
+};
+
+exports.Prisma.SalesOrderProductScalarFieldEnum = {
+  id: 'id',
+  salesOrderId: 'salesOrderId',
+  productId: 'productId',
+  product_qty: 'product_qty',
+  price: 'price'
 };
 
 exports.Prisma.SortOrder = {
@@ -137,15 +174,51 @@ exports.Prisma.SortOrder = {
   desc: 'desc'
 };
 
+exports.Prisma.NullsOrder = {
+  first: 'first',
+  last: 'last'
+};
+
 exports.Prisma.Sales_OrderOrderByRelevanceFieldEnum = {
   id: 'id',
-  product_name: 'product_name',
-  customer_name: 'customer_name'
+  customer_name: 'customer_name',
+  spkId: 'spkId'
+};
+
+exports.Prisma.SPKOrderByRelevanceFieldEnum = {
+  id: 'id'
+};
+
+exports.Prisma.MaterialOrderByRelevanceFieldEnum = {
+  id: 'id',
+  material_name: 'material_name'
+};
+
+exports.Prisma.ProductOrderByRelevanceFieldEnum = {
+  id: 'id',
+  product_name: 'product_name'
+};
+
+exports.Prisma.ProductMaterialOrderByRelevanceFieldEnum = {
+  id: 'id',
+  productId: 'productId',
+  materialId: 'materialId'
+};
+
+exports.Prisma.SalesOrderProductOrderByRelevanceFieldEnum = {
+  id: 'id',
+  salesOrderId: 'salesOrderId',
+  productId: 'productId'
 };
 
 
 exports.Prisma.ModelName = {
-  Sales_Order: 'Sales_Order'
+  Sales_Order: 'Sales_Order',
+  SPK: 'SPK',
+  Material: 'Material',
+  Product: 'Product',
+  ProductMaterial: 'ProductMaterial',
+  SalesOrderProduct: 'SalesOrderProduct'
 };
 
 /**
