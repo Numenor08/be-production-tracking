@@ -18,8 +18,11 @@ export const getMaterialById = async (req: Request, res: Response) => {
         const id = req.params.id
         const material = await prisma.material.findUnique({ where: { id } })
 
-        if (!material) res.status(404).json({ error: 'Material not found' })
-        return
+        if (!material) {
+            res.status(404).json({ error: 'Material not found' })
+        } else {
+            res.json(material)
+        }
     } catch {
         res.status(500).json({ error: 'Failed to fetch material' })
     }

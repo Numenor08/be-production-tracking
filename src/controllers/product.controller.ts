@@ -18,8 +18,11 @@ export const getProductById = async (req: Request, res: Response) => {
         const id = req.params.id
         const product = await prisma.product.findUnique({ where: { id } })
 
-        if (!product) res.status(404).json({ error: 'Product not found' })
-        return
+        if (!product) {
+            res.status(404).json({ error: 'Product not found' })
+        } else {
+            res.json(product)
+        }
     } catch {
         res.status(500).json({ error: 'Failed to fetch product' })
     }
