@@ -1,9 +1,11 @@
 import express from 'express'
 import dotenv from 'dotenv'
 import salesOrderRoute from './routes/salesOrder.route'
-import productRoute from './routes/product.route'
-import productMaterialRoute from './routes/productMaterial.route'
-import materialRoute from './routes/material.route'
+import gudangRoutes from './routes/gudang.route'
+import mesinRoutes from './routes/mesin.route'
+import spkRoutes from './routes/spk.route'
+import barangRoutes from './routes/barang.route'
+import laporanRoutes from './routes/Laporan.route'
 import cors from 'cors'
 
 dotenv.config()
@@ -21,9 +23,11 @@ app.use(
 app.use(express.json())
 
 app.use('/sales-order', salesOrderRoute)
-app.use('/product', productRoute)
-app.use('/product-material', productMaterialRoute)
-app.use('/material', materialRoute)
+app.use('/gudang', gudangRoutes)
+app.use('/mesin', mesinRoutes)
+app.use('/barang', barangRoutes)
+app.use('/spk', spkRoutes)
+app.use('/laporan', laporanRoutes)
 
 app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`)

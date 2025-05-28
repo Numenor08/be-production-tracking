@@ -15,71 +15,148 @@ datasource db {
 }
 
 model Sales_Order {
-  id            String   @id @default(cuid())
-  customer_name String
-  product_qty   Int
-  finish_date   DateTime
-  delivery_date DateTime
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  nama_cust          String
+  total_harga        Int
+  tanggal_selesai    DateTime
+  tanggal_pengiriman DateTime
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
-  products SalesOrderProduct[]
-  spk      SPK?                @relation(fields: [spkId], references: [id])
-  spkId    String?             @unique
+  Barang SalesOrderBarang[]
+  spks   SPK[]
 }
 
 model SPK {
-  id          String       @id @default(cuid())
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
-  Sales_Order Sales_Order?
+  id                         String    @id @default(cuid())
+  tanggal_selesai_preprocess DateTime?
+  tanggal_selesai_process    DateTime?
+  tanggal_selesai_finishing  DateTime?
+  mesin_preprocess           String
+  mesin_process              String
+  mesin_finishing            String
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  mesin1 Mesin? @relation("Mesin1", fields: [mesin_preprocess], references: [id])
+  mesin2 Mesin? @relation("Mesin2", fields: [mesin_process], references: [id])
+  mesin3 Mesin? @relation("Mesin3", fields: [mesin_finishing], references: [id])
+
+  salesOrder   Sales_Order    @relation(fields: [salesOrderId], references: [id])
+  salesOrderId String
+  gudangs      Gudang[]
+  historiMesin HistoriMesin[]
+  SPKBarangs   SpkBarang[]
+  laporan      Laporan?
 }
 
-model Material {
-  id            String   @id @default(cuid())
-  material_name String
-  price         Int
-  stock         Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+model Laporan {
+  id String @id @default(cuid())
 
-  products ProductMaterial[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  spkId         String          @unique
+  spk           SPK             @relation(fields: [spkId], references: [id])
+  LaporanBarang LaporanBarang[]
 }
 
-model Product {
-  id           String   @id @default(cuid())
-  product_name String
-  price        Int
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+model LaporanBarang {
+  id String @id @default(cuid())
 
-  materials   ProductMaterial[]
-  salesOrders SalesOrderProduct[]
+  laporan   Laporan @relation(fields: [laporanId], references: [id])
+  laporanId String
+
+  barang   Barang? @relation(fields: [barangId], references: [id])
+  barangId String?
+
+  tipe     Int
+  quantity Int
+
+  @@unique([laporanId, barangId])
 }
 
-model ProductMaterial {
-  id        String  @id @default(cuid())
-  product   Product @relation(fields: [productId], references: [id])
-  productId String
+model Gudang {
+  id    String @id @default(cuid())
+  Stock Int
 
-  material   Material @relation(fields: [materialId], references: [id])
-  materialId String
+  barangId String
+  barang   Barang @relation(fields: [barangId], references: [id])
 
-  stock_needed Int
+  spkId String?
+  spk   SPK?    @relation(fields: [spkId], references: [id])
 
-  @@unique([productId, materialId])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
-model SalesOrderProduct {
-  id           String      @id @default(cuid())
+model Barang {
+  id    String @id @default(cuid())
+  nama  String
+  tipe  Int
+  harga Int
+
+  salesOrders SalesOrderBarang[]
+
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  Gudang        Gudang[]
+  SpkBarang     SpkBarang[]
+  LaporanBarang LaporanBarang[]
+}
+
+model SalesOrderBarang {
+  id String @id @default(cuid())
+
   salesOrder   Sales_Order @relation(fields: [salesOrderId], references: [id])
   salesOrderId String
 
-  product   Product @relation(fields: [productId], references: [id])
-  productId String
+  Barang   Barang? @relation(fields: [barangId], references: [id])
+  barangId String?
 
-  product_qty Int
-  price       Int
+  quantity Int
 
-  @@unique([salesOrderId, productId])
+  @@unique([salesOrderId, barangId])
+}
+
+model Mesin {
+  id           String         @id @default(cuid())
+  Nama         String
+  Detail       String
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  HistoriMesin HistoriMesin[]
+  spkMesin1    SPK[]          @relation("Mesin1")
+  spkMesin2    SPK[]          @relation("Mesin2")
+  spkMesin3    SPK[]          @relation("Mesin3")
+}
+
+model SpkBarang {
+  id String @id @default(cuid())
+
+  spk   SPK    @relation(fields: [spkId], references: [id])
+  spkId String
+
+  barang   Barang @relation(fields: [barangId], references: [id])
+  barangId String
+
+  tipe Int
+
+  quantity Int
+}
+
+model HistoriMesin {
+  id      String @id @default(cuid())
+  mesinId String
+  sPKId   String
+
+  Mesin Mesin @relation(fields: [mesinId], references: [id])
+  SPK   SPK   @relation(fields: [sPKId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  status    Int
+  detail    String
+
+  @@unique([mesinId, sPKId])
 }

@@ -1,138 +1,135 @@
-import { PrismaClient } from '../../generated/prisma'
 import { Request, Response } from 'express'
-import { SalesOrderInput } from '../types'
+import { PrismaClient } from '../../generated/prisma'
 
 const prisma = new PrismaClient()
 
-export const getSalesOrders = async (req: Request, res: Response) => {
+export const getAllSalesOrders = async (_req: Request, res: Response) => {
     try {
         const salesOrders = await prisma.sales_Order.findMany()
         res.json(salesOrders)
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch sales orders' })
+    } catch {
+        res.status(500).json({ error: 'gagal fetch sales order' })
     }
 }
 
-const getSalesOrderById = async (req: Request, res: Response) => {
+export const getSalesOrderById = async (req: Request, res: Response) => {
     try {
-        const id = req.params.id
+        const { id } = req.params
         const salesOrder = await prisma.sales_Order.findUnique({
             where: { id },
+            include: {
+                Barang: true,
+            },
         })
 
         if (!salesOrder) {
-            res.status(404).json({ error: 'Sales order not found' })
-            return
+            res.status(404).json({ error: 'Sales order tidak di temukan' })
+        } else {
+            res.json(salesOrder)
         }
-
-        res.json(salesOrder)
-    } catch (error) {
-        res.status(500).json({ error: 'Failed to fetch sales order' })
+    } catch {
+        res.status(500).json({ error: 'gagal fetch sales order' })
     }
 }
 
 export const createSalesOrder = async (req: Request, res: Response) => {
-    const {
-        id,
-        productId,
-        product_qty,
-        price,
-        customer_name,
-        finish_date,
-        delivery_date,
-    } = req.body
-
     try {
-        const productMaterials = await prisma.productMaterial.findMany({
-            where: { productId },
-            include: { material: true },
-        })
+        const {
+            nama_cust,
+            total_harga,
+            tanggal_selesai,
+            tanggal_pengiriman,
+            barangs,
+        } = req.body
 
-        for (const pm of productMaterials) {
-            const totalNeeded = pm.stock_needed * product_qty
-
-            if (pm.material.stock < totalNeeded) {
-                res.status(400).json({
-                    error: `Stok material ${pm.material.material_name} tidak cukup. Dibutuhkan: ${totalNeeded}, tersedia: ${pm.material.stock}`,
-                })
-            }
-        }
-
-        const newSalesOrder = await prisma.sales_Order.create({
+        const newOrder = await prisma.sales_Order.create({
             data: {
-                id,
-                product_qty,
-                customer_name,
-                finish_date: new Date(finish_date),
-                delivery_date: new Date(delivery_date),
-            },
-        })
-
-        for (const pm of productMaterials) {
-            const totalNeeded = pm.stock_needed * product_qty
-
-            await prisma.material.update({
-                where: { id: pm.materialId },
-                data: {
-                    stock: { decrement: totalNeeded },
+                nama_cust,
+                total_harga,
+                tanggal_selesai: new Date(tanggal_selesai),
+                tanggal_pengiriman: new Date(tanggal_pengiriman),
+                Barang: {
+                    create: barangs.map(
+                        (item: { barangId: string; quantity: number }) => ({
+                            Barang: { connect: { id: item.barangId } },
+                            quantity: item.quantity,
+                        }),
+                    ),
                 },
-            })
-        }
-
-        const created = await prisma.salesOrderProduct.create({
-            data: {
-                salesOrderId: newSalesOrder.id,
-                productId,
-                product_qty: newSalesOrder.product_qty,
-                price,
+            },
+            include: {
+                Barang: true,
             },
         })
 
-        res.status(201).json({
-            salesOrder: newSalesOrder,
-            salesOrderProduct: created,
-        })
+        res.status(201).json(newOrder)
     } catch (error) {
         console.error(error)
-        res.status(500).json({ error: 'Gagal membuat sales order' })
+        res.status(500).json({ error: 'Gagal membuat Sales Order' })
     }
 }
 
-const updateSalesOrder = async (req: Request, res: Response) => {
-    const data = req.body as Partial<SalesOrderInput>
-
+export const updateSalesOrder = async (
+    req: Request<{ id: string }>,
+    res: Response,
+): Promise<void> => {
     try {
-        const id = req.params.id
+        const { id } = req.params
+        const {
+            nama_cust,
+            jumlah_product,
+            total_harga,
+            tanggal_selesai,
+            tanggal_pengiriman,
+            spkId,
+        } = req.body
+
+        const existing = await prisma.sales_Order.findUnique({ where: { id } })
+        if (!existing) {
+            res.status(404).json({ error: 'Sales order tidak di temukan' })
+            return
+        }
+
         const updated = await prisma.sales_Order.update({
             where: { id },
             data: {
-                ...data,
-                finish_date: data.finish_date
-                    ? new Date(data.finish_date)
-                    : undefined,
-                delivery_date: data.delivery_date
-                    ? new Date(data.delivery_date)
-                    : undefined,
+                nama_cust,
+                total_harga,
+                tanggal_selesai: new Date(tanggal_selesai),
+                tanggal_pengiriman: new Date(tanggal_pengiriman),
             },
         })
+
         res.json(updated)
     } catch (error) {
-        res.status(500).json({ error: 'Failed to update sales order' })
+        console.error(error)
+        res.status(500).json({ error: 'gagal update sales order' })
     }
 }
 
-const deleteSalesOrder = async (req: Request, res: Response) => {
+export const deleteSalesOrder = async (
+    req: Request<{ id: string }>,
+    res: Response,
+): Promise<void> => {
     try {
-        const id = req.params.id
+        const { id } = req.params
+
+        const existing = await prisma.sales_Order.findUnique({ where: { id } })
+        if (!existing) {
+            res.status(404).json({ error: 'Sales order tidak di temukan' })
+            return
+        }
+
         await prisma.sales_Order.delete({ where: { id } })
-        res.status(204).send()
+        res.json({ message: 'Sales order deleted successfully' })
     } catch (error) {
-        res.status(500).json({ error: 'Failed to delete sales order' })
+        console.error(error)
+        res.status(500).json({ error: 'sales order gagal di hapus' })
     }
 }
 
 export default {
-    getSalesOrders,
+    getAllSalesOrders,
     getSalesOrderById,
     createSalesOrder,
     updateSalesOrder,
