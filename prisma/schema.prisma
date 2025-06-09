@@ -14,29 +14,39 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum StatusPesanan {
+  DIPROSES
+  DIPROSES_DAN_DIPECAH
+  SELESAI
+  IDLE
+}
+
 model Sales_Order {
   id                 String   @id @default(cuid())
   nama_cust          String
   total_harga        Int
   tanggal_selesai    DateTime
   tanggal_pengiriman DateTime
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   Barang SalesOrderBarang[]
   spks   SPK[]
+  status StatusPesanan @default(IDLE)
 }
 
 model SPK {
-  id                         String    @id @default(cuid())
-  tanggal_selesai_preprocess DateTime?
-  tanggal_selesai_process    DateTime?
-  tanggal_selesai_finishing  DateTime?
-  mesin_preprocess           String
-  mesin_process              String
-  mesin_finishing            String
-  createdAt                  DateTime  @default(now())
-  updatedAt                  DateTime  @updatedAt
+  id                          String        @id @default(cuid())
+  tanggal_deadline_preprocess DateTime?
+  tanggal_deadline_process    DateTime?
+  tanggal_deadline_finishing  DateTime?
+  mesin_preprocess            String?
+  mesin_process               String?
+  mesin_finishing             String?
+  status StatusPesanan @default(IDLE)
+  createdAt                   DateTime      @default(now())
+  updatedAt                   DateTime      @updatedAt
 
   mesin1 Mesin? @relation("Mesin1", fields: [mesin_preprocess], references: [id])
   mesin2 Mesin? @relation("Mesin2", fields: [mesin_process], references: [id])
@@ -52,6 +62,10 @@ model SPK {
 
 model Laporan {
   id String @id @default(cuid())
+
+  tanggal_selesai_preprocess DateTime?
+  tanggal_selesai_process    DateTime?
+  tanggal_selesai_finishing  DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -101,7 +115,8 @@ model Barang {
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   Gudang        Gudang[]
-  SpkBarang     SpkBarang[]
+  spkBarangInput SpkBarang[] @relation("InputBarang")
+  spkBarangOutput SpkBarang[] @relation("OutputBarang")
   LaporanBarang LaporanBarang[]
 }
 
@@ -137,13 +152,18 @@ model SpkBarang {
   spk   SPK    @relation(fields: [spkId], references: [id])
   spkId String
 
-  barang   Barang @relation(fields: [barangId], references: [id])
-  barangId String
+
+  barang   Barang @relation("InputBarang", fields: [barang_input_Id], references: [id])
+  barang_input_Id String
+
+  barang_output   Barang @relation("OutputBarang", fields: [barang_output_Id], references: [id])
+  barang_output_Id String
 
   tipe Int
-
-  quantity Int
+  quantity_input Int
+  quantity_output Int
 }
+
 
 model HistoriMesin {
   id      String @id @default(cuid())

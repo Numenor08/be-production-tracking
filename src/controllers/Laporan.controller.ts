@@ -43,36 +43,120 @@ export const getLaporanById = async (
     }
 }
 
+// export const createLaporan = async (req: Request, res: Response) => {
+//     try {
+//         const { spkId, laporanBarang = [],tanggal_selesai_preprocess,
+//         tanggal_selesai_process,
+//         tanggal_selesai_finishing, } = req.body
+
+//         const spkBarangs = await prisma.spkBarang.findMany({
+//             where: { spkId },
+//             select: { barangId: true, tipe: true },
+//         })
+
+//         const allowedBarangIds = spkBarangs.map((b) => b.barangId)
+//         const laporanBarangFiltered = laporanBarang.filter(
+//             (item: { barangId: string }) =>
+//                 allowedBarangIds.includes(item.barangId),
+//         )
+
+//         const result = await prisma.$transaction(async (tx) => {
+//             const laporan = await tx.laporan.create({
+//                 data: {
+//                     spk: { connect: { id: spkId } },
+//                      tanggal_selesai_preprocess: new Date(
+//                         tanggal_selesai_preprocess,
+//                     ),
+//                     tanggal_selesai_process: new Date(tanggal_selesai_process),
+//                     tanggal_selesai_finishing: new Date(
+//                         tanggal_selesai_finishing,
+//                     ),
+//                     LaporanBarang: {
+//                         create: laporanBarangFiltered.map(
+//                             (item: { barangId: string; quantity: number }) => {
+//                                 const spkBarang = spkBarangs.find(
+//                                     (b) => b.barangId === item.barangId,
+//                                 )
+//                                 return {
+//                                     barang: { connect: { id: item.barangId } },
+//                                     quantity: item.quantity,
+//                                     tipe: spkBarang?.tipe,
+//                                 }
+//                             },
+//                         ),
+//                     },
+//                 },
+//                 include: {
+//                     LaporanBarang: true,
+//                 },
+//             })
+
+//             for (const item of laporanBarangFiltered) {
+//                 const existingGudang = await tx.gudang.findFirst({
+//                     where: {
+//                         spkId,
+//                         barangId: item.barangId,
+//                     },
+//                 })
+//                 if (!existingGudang) {
+//                     await tx.gudang.create({
+//                         data: {
+//                             spkId,
+//                             barangId: item.barangId,
+//                             Stock: item.quantity,
+//                         },
+//                     })
+//                 } else {
+//                     await tx.gudang.update({
+//                         where: { id: existingGudang.id },
+//                         data: { Stock: item.quantity },
+//                     })
+//                 }
+//             }
+
+//             return laporan
+//         })
+
+//         res.status(201).json(result)
+//     } catch (err) {
+//         console.error(err)
+//         res.status(500).json({ error: 'Gagal membuat Laporan' })
+//     }
+// }
+
 export const createLaporan = async (req: Request, res: Response) => {
     try {
-        const { spkId, laporanBarang = [] } = req.body
+        const {
+            spkId,
+            laporanBarang = [],
+            tanggal_selesai_preprocess,
+            tanggal_selesai_process,
+            tanggal_selesai_finishing,
+        } = req.body
 
         const spkBarangs = await prisma.spkBarang.findMany({
             where: { spkId },
-            select: { barangId: true, tipe: true },
+            select: { barang_output_Id: true, tipe: true },
         })
 
-        console.log('spkBarangs:', spkBarangs)
-
-        const allowedBarangIds = spkBarangs.map((b) => b.barangId)
+        const allowedBarangIds = spkBarangs.map((b) => b.barang_output_Id)
         const laporanBarangFiltered = laporanBarang.filter(
             (item: { barangId: string }) =>
                 allowedBarangIds.includes(item.barangId),
         )
 
-        console.log(allowedBarangIds)
-
-        console.log('laporanBarangFiltered:', laporanBarangFiltered)
-
         const result = await prisma.$transaction(async (tx) => {
             const laporan = await tx.laporan.create({
                 data: {
                     spk: { connect: { id: spkId } },
+                    tanggal_selesai_preprocess: new Date(tanggal_selesai_preprocess),
+                    tanggal_selesai_process: new Date(tanggal_selesai_process),
+                    tanggal_selesai_finishing: new Date(tanggal_selesai_finishing),
                     LaporanBarang: {
                         create: laporanBarangFiltered.map(
                             (item: { barangId: string; quantity: number }) => {
                                 const spkBarang = spkBarangs.find(
-                                    (b) => b.barangId === item.barangId,
+                                    (b) => b.barang_output_Id === item.barangId,
                                 )
                                 return {
                                     barang: { connect: { id: item.barangId } },
@@ -111,6 +195,24 @@ export const createLaporan = async (req: Request, res: Response) => {
                 }
             }
 
+            const spk = await tx.sPK.findUnique({
+                where: { id: spkId },
+                select: { salesOrderId: true },
+            })
+
+            await tx.sPK.update({
+                where: { id: spkId },
+                data: { status: 'SELESAI' },
+            })
+
+            if (spk?.salesOrderId) {
+                await tx.sales_Order.update({
+                    where: { id: spk.salesOrderId },
+                    data: { status: 'SELESAI' },
+                })
+            }
+
+            console.log(laporanBarangFiltered,laporanBarang,allowedBarangIds)
             return laporan
         })
 
@@ -120,6 +222,7 @@ export const createLaporan = async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Gagal membuat Laporan' })
     }
 }
+
 
 export const updateLaporan = async (
     req: Request<{ id: string }>,

@@ -27,7 +27,8 @@ export const getBarangById = async (
             include: {
                 Gudang: true,
                 salesOrders: true,
-                SpkBarang: true,
+                spkBarangInput: true,
+                spkBarangOutput: true,
             },
         })
         if (!result) {
