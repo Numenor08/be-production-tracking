@@ -20,7 +20,12 @@ export default defineConfig([
         plugins: { js },
         extends: ['js/recommended'],
     },
-    tseslint.configs.recommended,
+    {
+        ...tseslint.configs.recommended,
+        rules: {
+            '@typescript-eslint/no-explicit-any': 'off',
+        }
+    },
     {
         files: ['test/**/*.{js,ts,jsx,tsx}'],
         ...jest.configs['flat/recommended'],

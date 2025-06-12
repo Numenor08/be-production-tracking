@@ -94,7 +94,7 @@ export const getSPKById = async (req: Request, res: Response) => {
 //     }
 // }
 
-export const createSPK = async (req: Request, res: Response) => {
+export const createSPK = async (req: Request, res: Response): Promise<any> => {
     const {
         mesin_preprocess,
         mesin_process,
@@ -107,6 +107,48 @@ export const createSPK = async (req: Request, res: Response) => {
     } = req.body
 
     try {
+        if (mesin_preprocess) {
+            const mesin1Exists = await prisma.mesin.findUnique({
+                where: { id: mesin_preprocess },
+            })
+            if (!mesin1Exists) {
+                return res.status(404).json({
+                    error: 'Mesin preprocess tidak ditemukan',
+                })
+            }
+        }
+
+        if (mesin_process) {
+            const mesin2Exists = await prisma.mesin.findUnique({
+                where: { id: mesin_process },
+            })
+            if (!mesin2Exists) {
+                return res.status(404).json({
+                    error: 'Mesin process tidak ditemukan',
+                })
+            }
+        }
+
+        if (mesin_finishing) {
+            const mesin3Exists = await prisma.mesin.findUnique({
+                where: { id: mesin_finishing },
+            })
+            if (!mesin3Exists) {
+                return res.status(404).json({
+                    error: 'Mesin finishing tidak ditemukan',
+                })
+            }
+        }
+
+        const salesOrderExists = await prisma.sales_Order.findUnique({
+            where: { id: salesOrderId },
+        })
+        if (!salesOrderExists) {
+            return res.status(404).json({
+                error: 'Sales Order tidak ditemukan',
+            })
+        }
+
         const result = await prisma.$transaction(async (tx) => {
             const dataToCreate: any = {
                 tanggal_deadline_preprocess: tanggal_deadline_preprocess
