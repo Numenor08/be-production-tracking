@@ -1,5 +1,6 @@
 export interface SalesOrderType {
     id: string
+    code: string
     nama_cust: string
     jumlah_product: number
     total_harga: number

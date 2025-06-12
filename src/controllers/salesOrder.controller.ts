@@ -1,5 +1,6 @@
 import { Request, Response } from 'express'
 import { PrismaClient } from '../../generated/prisma'
+import { generateSOCode } from '../libs/generate'
 
 const prisma = new PrismaClient()
 
@@ -42,10 +43,20 @@ export const createSalesOrder = async (req: Request, res: Response) => {
             barangs,
         } = req.body
 
+        const code = await generateSOCode()
+        const existing = await prisma.sales_Order.findFirst({
+            where: { code },
+        })
+        if (existing) {
+            res.status(400).json({ error: 'Failed to create Sales Order Code' })
+            return
+        }
+
         const newOrder = await prisma.sales_Order.create({
             data: {
                 nama_cust,
                 total_harga,
+                code,
                 tanggal_selesai: new Date(tanggal_selesai),
                 tanggal_pengiriman: new Date(tanggal_pengiriman),
                 Barang: {

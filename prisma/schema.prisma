@@ -23,6 +23,7 @@ enum StatusPesanan {
 
 model Sales_Order {
   id                 String   @id @default(cuid())
+  code               String   @unique
   nama_cust          String
   total_harga        Int
   tanggal_selesai    DateTime
