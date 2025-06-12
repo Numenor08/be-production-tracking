@@ -21,6 +21,30 @@ enum StatusPesanan {
   IDLE
 }
 
+enum ProcessStage {
+  PREPROCESS
+  PROCESS
+  FINISHING
+}
+
+enum PaletStatus {
+  READY
+  SHIPPED
+}
+
+enum PhaseStatus {
+  NOT_STARTED
+  ONGOING
+  COMPLETED
+  SKIPPED
+}
+
+enum ItemType {
+  MATERIAL
+  SEMI_FINISHED
+  PRODUCT
+}
+
 model Sales_Order {
   id                 String   @id @default(cuid())
   code               String   @unique
@@ -34,20 +58,35 @@ model Sales_Order {
 
   Barang SalesOrderBarang[]
   spks   SPK[]
-  status StatusPesanan @default(IDLE)
+  status StatusPesanan      @default(IDLE)
+  palets Palet[]
 }
 
 model SPK {
-  id                          String        @id @default(cuid())
+  id                          String    @id @default(cuid())
+  code                        String    @unique
   tanggal_deadline_preprocess DateTime?
   tanggal_deadline_process    DateTime?
   tanggal_deadline_finishing  DateTime?
   mesin_preprocess            String?
   mesin_process               String?
   mesin_finishing             String?
-  status StatusPesanan @default(IDLE)
-  createdAt                   DateTime      @default(now())
-  updatedAt                   DateTime      @updatedAt
+
+  // Track starting stage
+  start_stage ProcessStage @default(PREPROCESS)
+
+  // Phase status tracking
+  preprocess_status PhaseStatus @default(NOT_STARTED)
+  process_status    PhaseStatus @default(NOT_STARTED)
+  finishing_status  PhaseStatus @default(NOT_STARTED)
+
+  // Date tracking for each stage
+  tanggal_mulai_preprocess DateTime?
+  tanggal_mulai_process    DateTime?
+  tanggal_mulai_finishing  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   mesin1 Mesin? @relation("Mesin1", fields: [mesin_preprocess], references: [id])
   mesin2 Mesin? @relation("Mesin2", fields: [mesin_process], references: [id])
@@ -58,67 +97,126 @@ model SPK {
   gudangs      Gudang[]
   historiMesin HistoriMesin[]
   SPKBarangs   SpkBarang[]
+  SPKPhases    SPKPhase[]
   laporan      Laporan?
+  PaletItem    PaletItem[]
+}
+
+model SPKPhase {
+  id     String       @id @default(cuid())
+  spk    SPK          @relation(fields: [spk_id], references: [id])
+  spk_id String
+  stage  ProcessStage
+
+  // Target quantities
+  target_quantity Int
+  planned_waste   Int @default(0)
+
+  // Actual quantities
+  actual_quantity Int @default(0)
+  actual_waste    Int @default(0)
+
+  // Tracking if inventory was used to meet shortfall
+  inventory_used Int @default(0)
+
+  barang_id String // The output product of this phase
+  barang    Barang @relation(fields: [barang_id], references: [id])
+
+  start_date      DateTime?
+  completion_date DateTime?
+  status          PhaseStatus @default(NOT_STARTED)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([spk_id, stage])
 }
 
 model Laporan {
   id String @id @default(cuid())
 
+  // Tambahkan informasi per fase
+  preprocess_details String? // Catatan detail proses preprocess
+  process_details    String? // Catatan detail proses process
+  finishing_details  String? // Catatan detail proses finishing
+
+  // Data existing
   tanggal_selesai_preprocess DateTime?
   tanggal_selesai_process    DateTime?
   tanggal_selesai_finishing  DateTime?
 
+  // Tambahkan ringkasan hasil per fase
+  preprocess_summary Json? // Menyimpan data ringkasan preprocess 
+  process_summary    Json? // Menyimpan data ringkasan process
+  finishing_summary  Json? // Menyimpan data ringkasan finishing
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  spkId         String          @unique
-  spk           SPK             @relation(fields: [spkId], references: [id])
+  spk_id        String          @unique
+  spk           SPK             @relation(fields: [spk_id], references: [id])
   LaporanBarang LaporanBarang[]
 }
 
 model LaporanBarang {
   id String @id @default(cuid())
 
-  laporan   Laporan @relation(fields: [laporanId], references: [id])
-  laporanId String
+  laporan    Laporan @relation(fields: [laporan_id], references: [id])
+  laporan_id String
 
-  barang   Barang? @relation(fields: [barangId], references: [id])
-  barangId String?
+  barang    Barang? @relation(fields: [barang_id], references: [id])
+  barang_id String?
 
-  tipe     Int
-  quantity Int
+  fase ProcessStage // Fase produksi barang ini
+  tipe ItemType // Tetap pertahankan field ini
 
-  @@unique([laporanId, barangId])
+  // Data kuantitas
+  quantity       Int // Tetap pertahankan field ini
+  waste_quantity Int // Jumlah waste yang dihasilkan
+  inventory_used Int // Inventori yang digunakan untuk menutupi shortfall
+
+  // Keterangan tambahan (misalnya alasan waste tinggi)
+  keterangan String?
+
+  @@unique([laporan_id, barang_id, fase])
 }
 
 model Gudang {
-  id    String @id @default(cuid())
-  Stock Int
+  id          String @id @default(cuid())
+  stock       Int
+  waste_stock Int    @default(0) // Track waste separately
 
   barangId String
   barang   Barang @relation(fields: [barangId], references: [id])
 
-  spkId String?
-  spk   SPK?    @relation(fields: [spkId], references: [id])
+  // Track which SPK and phase produced this inventory
+  spk_id           String?
+  spk              SPK?          @relation(fields: [spk_id], references: [id])
+  production_stage ProcessStage?
+
+  is_waste Boolean @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  PaletItem PaletItem[]
 }
 
 model Barang {
-  id    String @id @default(cuid())
+  id    String   @id @default(cuid())
   nama  String
-  tipe  Int
+  tipe  ItemType
   harga Int
 
   salesOrders SalesOrderBarang[]
+  spkPhases   SPKPhase[]
 
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-  Gudang        Gudang[]
-  spkBarangInput SpkBarang[] @relation("InputBarang")
-  spkBarangOutput SpkBarang[] @relation("OutputBarang")
-  LaporanBarang LaporanBarang[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  Gudang          Gudang[]
+  spkBarangInput  SpkBarang[]     @relation("InputBarang")
+  spkBarangOutput SpkBarang[]     @relation("OutputBarang")
+  LaporanBarang   LaporanBarang[]
 }
 
 model SalesOrderBarang {
@@ -136,15 +234,16 @@ model SalesOrderBarang {
 }
 
 model Mesin {
-  id           String         @id @default(cuid())
-  Nama         String
-  Detail       String
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  HistoriMesin HistoriMesin[]
-  spkMesin1    SPK[]          @relation("Mesin1")
-  spkMesin2    SPK[]          @relation("Mesin2")
-  spkMesin3    SPK[]          @relation("Mesin3")
+  id                 String         @id @default(cuid())
+  Nama               String
+  Detail             String
+  type               ProcessStage
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  HistoriMesin       HistoriMesin[]
+  spkMesinPreprocess SPK[]          @relation("Mesin1")
+  spkMesinProcess    SPK[]          @relation("Mesin2")
+  spkMesinFinishing  SPK[]          @relation("Mesin3")
 }
 
 model SpkBarang {
@@ -153,18 +252,16 @@ model SpkBarang {
   spk   SPK    @relation(fields: [spkId], references: [id])
   spkId String
 
-
-  barang   Barang @relation("InputBarang", fields: [barang_input_Id], references: [id])
+  barang          Barang @relation("InputBarang", fields: [barang_input_Id], references: [id])
   barang_input_Id String
 
-  barang_output   Barang @relation("OutputBarang", fields: [barang_output_Id], references: [id])
+  barang_output    Barang @relation("OutputBarang", fields: [barang_output_Id], references: [id])
   barang_output_Id String
 
-  tipe Int
-  quantity_input Int
+  tipe            Int
+  quantity_input  Int
   quantity_output Int
 }
-
 
 model HistoriMesin {
   id      String @id @default(cuid())
@@ -180,4 +277,36 @@ model HistoriMesin {
   detail    String
 
   @@unique([mesinId, sPKId])
+}
+
+model Palet {
+  id             String      @id @default(cuid())
+  code           String      @unique
+  status         PaletStatus @default(READY) // READY, SHIPPED
+  qrcode_data    String      @unique
+  sales_order_id String
+  salesOrder     Sales_Order @relation(fields: [sales_order_id], references: [id])
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  paletItems PaletItem[]
+}
+
+model PaletItem {
+  id       String @id @default(cuid())
+  quantity Int
+
+  palet_id String
+  palet    Palet  @relation(fields: [palet_id], references: [id], onDelete: Cascade)
+
+  item_id String
+  gudang  Gudang @relation(fields: [item_id], references: [id])
+
+  spk_id String
+  spk    SPK    @relation(fields: [spk_id], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([palet_id, item_id, spk_id])
 }
