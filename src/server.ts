@@ -7,6 +7,7 @@ import spkRoutes from './routes/spk.route'
 import barangRoutes from './routes/barang.route'
 import laporanRoutes from './routes/Laporan.route'
 import notFoundHandler from './middlewares/notFound.middleware'
+import { printServerBanner, routeLogger, setPort} from './middlewares/routeLogger.middleware'
 import cors from 'cors'
 import colors from 'colors'
 
@@ -15,7 +16,8 @@ colors.enable();
 
 const app = express()
 
-const port = process.env.PORT
+const port = process.env.PORT || 3000;
+setPort(port);
 
 app.use(
     cors({
@@ -25,6 +27,8 @@ app.use(
 )
 
 app.use(express.json())
+
+app.use(routeLogger);
 
 const apiV1Router = express.Router()
 
@@ -52,6 +56,5 @@ app.get('/', (req, res) => {
 app.use(notFoundHandler)
 
 app.listen(port, () => {
-    console.log('   Production Tracking API Server   '.black.bgGreen)
-    console.log(`Server is running at http://localhost:${port}`.green)
+    printServerBanner()
 })
