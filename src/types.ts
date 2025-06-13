@@ -85,8 +85,8 @@ export interface SPK_Phase {
     actualQuantity: number;
     actualWaste: number;
     storageUsed: number;
-    productId: string;
-    product?: Product;
+    itemId: string;
+    item?: Item;
     startDate?: Date | null;
     completionDate?: Date | null;
     status: PhaseStatus;
@@ -114,10 +114,10 @@ export interface Report {
 
 export interface ReportItem {
     id: string;
-    reportId: string;
     report?: Report;
-    productId?: string | null;
-    product?: Product | null;
+    reportId: string;
+    item?: Item | null;
+    itemId?: string | null;
     phase: ProcessStage;
     itemType: ItemType;
     quantity: number;
@@ -130,8 +130,8 @@ export interface Storage {
     id: string;
     stock: number;
     wasteStock: number;
-    productId: string;
-    product?: Product;
+    itemId: string;
+    item?: Item;
     productionOrderId?: string | null;
     productionOrder?: SPK | null;
     productionStage?: ProcessStage | null;
@@ -141,7 +141,7 @@ export interface Storage {
     palletItems?: PalletItem[];
 }
 
-export interface Product {
+export interface Item {
     id: string;
     name: string;
     type: ItemType;
@@ -158,10 +158,10 @@ export interface Product {
 
 export interface SalesOrderItem {
     id: string;
-    salesOrderId: string;
     salesOrder?: SalesOrder;
-    productId?: string | null;
-    product?: Product | null;
+    salesOrderId: string;
+    item?: Item | null;
+    itemId?: string | null;
     quantity: number;
 }
 
@@ -180,12 +180,12 @@ export interface Machine {
 
 export interface ProductionItem {
     id: string;
-    productionOrderId: string;
     productionOrder?: SPK;
-    inputProductId: string;
-    inputProduct?: Product;
-    outputProductId: string;
-    outputProduct?: Product;
+    productionOrderId: string;
+    inputItem?: Item;
+    inputItemId: string;
+    outputItem?: Item;
+    outputItemId: string;
     type: number;
     inputQuantity: number;
     outputQuantity: number;
@@ -193,10 +193,10 @@ export interface ProductionItem {
 
 export interface MachineHistory {
     id: string;
-    machineId: string;
-    productionOrderId: string;
     machine?: Machine;
+    machineId: string;
     productionOrder?: SPK;
+    productionOrderId: string;
     createdAt: Date;
     updatedAt: Date;
     status: number;
@@ -208,8 +208,8 @@ export interface Pallet {
     code: string;
     status: PalletStatus;
     qrCodeData: string;
-    salesOrderId: string;
     salesOrder?: SalesOrder;
+    salesOrderId: string;
     createdAt: Date;
     updatedAt: Date;
     items?: PalletItem[];
@@ -218,12 +218,12 @@ export interface Pallet {
 export interface PalletItem {
     id: string;
     quantity: number;
-    palletId: string;
     pallet?: Pallet;
-    storageItemId: string;
+    palletId: string;
     storageItem?: Storage;
-    productionOrderId: string;
+    storageItemId: string;
     productionOrder?: SPK;
+    productionOrderId: string;
     createdAt: Date;
     updatedAt: Date;
 }

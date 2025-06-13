@@ -72,15 +72,12 @@ model SPK {
   processMachineId         String?
   finishingMachineId       String?
 
-  // Track starting stage
   startStage               ProcessStage @default(PREPROCESS)
 
-  // Phase status tracking
   preprocessStatus         PhaseStatus @default(NOT_STARTED)
   processStatus            PhaseStatus @default(NOT_STARTED)
   finishingStatus          PhaseStatus @default(NOT_STARTED)
 
-  // Date tracking for each stage
   preprocessStartDate      DateTime?
   processStartDate         DateTime?
   finishingStartDate       DateTime?
@@ -108,19 +105,16 @@ model SPK_Phase {
   productionOrderId String
   stage           ProcessStage
 
-  // Target quantities
   targetQuantity  Int
   plannedWaste    Int @default(0)
 
-  // Actual quantities
   actualQuantity  Int @default(0)
   actualWaste     Int @default(0)
 
-  // Tracking if storage was used to meet shortfall
   storageUsed     Int @default(0)
 
-  productId       String // The output product of this phase
-  product         Product @relation(fields: [productId], references: [id])
+  itemId         String
+  item           Item @relation(fields: [itemId], references: [id])
 
   startDate       DateTime?
   completionDate  DateTime?
@@ -135,20 +129,18 @@ model SPK_Phase {
 model Report {
   id                      String @id @default(cuid())
 
-  // Add information per phase
-  preprocessDetails       String? // Detailed notes for preprocess
-  processDetails          String? // Detailed notes for process
-  finishingDetails        String? // Detailed notes for finishing
+  preprocessDetails       String?
+  processDetails          String?
+  finishingDetails        String?
 
-  // Existing data
   preprocessCompletionDate DateTime?
   processCompletionDate    DateTime?
   finishingCompletionDate  DateTime?
 
   // Add phase result summaries
-  preprocessSummary       Json? // Store preprocess summary data 
-  processSummary          Json? // Store process summary data
-  finishingSummary        Json? // Store finishing summary data
+  preprocessSummary       Json?
+  processSummary          Json?
+  finishingSummary        Json?
 
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
@@ -164,32 +156,29 @@ model ReportItem {
   report          Report @relation(fields: [reportId], references: [id])
   reportId        String
 
-  product         Product? @relation(fields: [productId], references: [id])
-  productId       String?
+  item            Item? @relation(fields: [itemId], references: [id])
+  itemId         String?
 
-  phase           ProcessStage // Production phase of this item
-  itemType        ItemType // Keep this field
+  phase           ProcessStage
+  itemType        ItemType
 
-  // Quantity data
-  quantity        Int // Keep this field
-  wasteQuantity   Int // Amount of waste produced
-  storageUsed     Int // Storage used to cover shortfall
+  quantity        Int
+  wasteQuantity   Int
+  storageUsed     Int
 
-  // Additional notes (e.g., reasons for high waste)
   notes           String?
 
-  @@unique([reportId, productId, phase])
+  @@unique([reportId, itemId, phase])
 }
 
 model Storage {
   id              String @id @default(cuid())
   stock           Int
-  wasteStock      Int    @default(0) // Track waste separately
+  wasteStock      Int    @default(0)
 
-  productId       String
-  product         Product @relation(fields: [productId], references: [id])
+  itemId         String
+  item           Item @relation(fields: [itemId], references: [id])
 
-  // Track which production order and phase produced this inventory
   productionOrderId String?
   productionOrder   SPK? @relation(fields: [productionOrderId], references: [id])
   productionStage   ProcessStage?
@@ -202,7 +191,7 @@ model Storage {
   palletItems     PalletItem[]
 }
 
-model Product {
+model Item {
   id              String   @id @default(cuid())
   name            String
   type            ItemType
@@ -214,8 +203,8 @@ model Product {
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
   storageItems    Storage[]
-  inputItems      ProductionItem[] @relation("InputProduct")
-  outputItems     ProductionItem[] @relation("OutputProduct")
+  inputItems      ProductionItem[] @relation("InputItem")
+  outputItems     ProductionItem[] @relation("OutputItem")
   reportItems     ReportItem[]
 }
 
@@ -225,12 +214,12 @@ model SalesOrderItem {
   salesOrder      SalesOrder @relation(fields: [salesOrderId], references: [id])
   salesOrderId    String
 
-  product         Product? @relation(fields: [productId], references: [id])
-  productId       String?
+  item            Item? @relation(fields: [itemId], references: [id])
+  itemId         String?
 
   quantity        Int
 
-  @@unique([salesOrderId, productId])
+  @@unique([salesOrderId, itemId])
 }
 
 model Machine {
@@ -252,11 +241,11 @@ model ProductionItem {
   productionOrder      SPK @relation(fields: [productionOrderId], references: [id])
   productionOrderId    String
 
-  inputProduct         Product @relation("InputProduct", fields: [inputProductId], references: [id])
-  inputProductId       String
+  inputItem            Item @relation("InputItem", fields: [inputItemId], references: [id])
+  inputItemId          String
 
-  outputProduct        Product @relation("OutputProduct", fields: [outputProductId], references: [id])
-  outputProductId      String
+  outputItem           Item @relation("OutputItem", fields: [outputItemId], references: [id])
+  outputItemId         String
 
   type                 Int
   inputQuantity        Int
