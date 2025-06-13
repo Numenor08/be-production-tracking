@@ -2,13 +2,17 @@ import express from 'express'
 import dotenv from 'dotenv'
 import salesOrderRoute from './routes/salesOrder.route'
 import gudangRoutes from './routes/gudang.route'
-import mesinRoutes from './routes/mesin.route'
+import machineRouter from './routes/machine.route'
 import spkRoutes from './routes/spk.route'
 import barangRoutes from './routes/barang.route'
 import laporanRoutes from './routes/Laporan.route'
+import notFoundHandler from './middlewares/notFound.middleware'
 import cors from 'cors'
+import colors from 'colors'
 
 dotenv.config()
+colors.enable();
+
 const app = express()
 
 const port = process.env.PORT
@@ -22,13 +26,32 @@ app.use(
 
 app.use(express.json())
 
-app.use('/sales-order', salesOrderRoute)
-app.use('/gudang', gudangRoutes)
-app.use('/mesin', mesinRoutes)
-app.use('/barang', barangRoutes)
-app.use('/spk', spkRoutes)
-app.use('/laporan', laporanRoutes)
+const apiV1Router = express.Router()
+
+// apiV1Router.use('/sales-order', salesOrderRoute)
+// apiV1Router.use('/storage', gudangRoutes)
+apiV1Router.use('/machine', machineRouter)
+// apiV1Router.use('/product', barangRoutes)
+// apiV1Router.use('/production-order', spkRoutes)
+// apiV1Router.use('/report', laporanRoutes)
+
+app.use('/api/v1', apiV1Router)
+
+app.get('/api', (req, res) => {
+    res.json({
+        message: 'Production Tracking API',
+        version: 'v1',
+        endpoints: '/api/v1'
+    })
+})
+
+app.get('/', (req, res) => {
+    res.send('Production Tracking API Server')
+})
+
+app.use(notFoundHandler)
 
 app.listen(port, () => {
-    console.log(`Server is running at http://localhost:${port}`)
+    console.log('   Production Tracking API Server   '.black.bgGreen)
+    console.log(`Server is running at http://localhost:${port}`.green)
 })
