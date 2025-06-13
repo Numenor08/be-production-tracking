@@ -8,7 +8,7 @@ export async function generateSOCode() {
         now.getFullYear().toString().slice(-2) +
         (now.getMonth() + 1).toString().padStart(2, '0') 
 
-    const lastOrder = await prisma.sales_Order.findFirst({
+    const lastOrder = await prisma.salesOrder.findFirst({
         where: {
             code: {
                 startsWith: `SO-${yearMonth}-`,
@@ -34,7 +34,6 @@ export async function generateSPKCode(): Promise<string> {
     const currentYear = now.getFullYear().toString().slice(-2)
     const period = `${currentMonth}-${currentYear}`
 
-    // 1. Cari SPK terakhir di periode yang sama (bulan & tahun ini)
     const lastSPK = await prisma.sPK.findFirst({
         where: {
             code: {
@@ -46,18 +45,15 @@ export async function generateSPKCode(): Promise<string> {
         },
     })
 
-    // 2. Parse nomor urut dari kode terakhir
     let nextSequence = 1
     if (lastSPK?.code) {
-        const lastSequence = parseInt(lastSPK.code.split('/')[0]) // Ambil bagian "0472"
+        const lastSequence = parseInt(lastSPK.code.split('/')[0])
         if (!isNaN(lastSequence)) {
             nextSequence = lastSequence + 1
         }
     }
 
-    // 3. Format nomor urut dengan 4 digit (contoh: 0472)
     const sequencePart = nextSequence.toString().padStart(4, '0')
 
-    // 4. Gabungkan semua komponen
     return `${sequencePart}/SPK/${period}`
 }

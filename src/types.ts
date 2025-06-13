@@ -1,7 +1,7 @@
-export enum StatusPesanan {
-    DIPROSES = 'DIPROSES',
-    DIPROSES_DAN_DIPECAH = 'DIPROSES_DAN_DIPECAH',
-    SELESAI = 'SELESAI',
+export enum OrderStatus {
+    IN_PROGRESS = 'IN_PROGRESS',
+    SPLIT_PROCESSING = 'SPLIT_PROCESSING',
+    COMPLETED = 'COMPLETED',
     IDLE = 'IDLE',
 }
 
@@ -11,7 +11,7 @@ export enum ProcessStage {
     FINISHING = 'FINISHING',
 }
 
-export enum PaletStatus {
+export enum PalletStatus {
     READY = 'READY',
     SHIPPED = 'SHIPPED',
 }
@@ -29,201 +29,201 @@ export enum ItemType {
     PRODUCT = 'PRODUCT',
 }
 
-export interface SalesOrderType {
-    id: string
-    code: string
-    nama_cust: string
-    total_harga: number
-    tanggal_selesai: Date
-    tanggal_pengiriman: Date
-    createdAt: Date
-    updatedAt: Date
-    status: StatusPesanan
-    Barang?: SalesOrderBarangType[]
-    spks?: SPKType[]
-    palets?: PaletType[]
+export interface SalesOrder {
+    id: string;
+    code: string;
+    customerName: string;
+    totalPrice: number;
+    completionDate: Date;
+    deliveryDate: Date;
+    createdAt: Date;
+    updatedAt: Date;
+    items?: SalesOrderItem[];
+    productionOrders?: SPK[];
+    status: OrderStatus;
+    pallets?: Pallet[];
 }
 
-export interface SPKType {
-    id: string
-    code: string
-    tanggal_deadline_preprocess?: Date | null
-    tanggal_deadline_process?: Date | null
-    tanggal_deadline_finishing?: Date | null
-    mesin_preprocess?: string | null
-    mesin_process?: string | null
-    mesin_finishing?: string | null
-    start_stage: ProcessStage
-    preprocess_status: PhaseStatus
-    process_status: PhaseStatus
-    finishing_status: PhaseStatus
-    tanggal_mulai_preprocess?: Date | null
-    tanggal_mulai_process?: Date | null
-    tanggal_mulai_finishing?: Date | null
-    createdAt: Date
-    updatedAt: Date
-    salesOrderId: string
-    salesOrder?: SalesOrderType
-    mesin1?: MesinType | null
-    mesin2?: MesinType | null
-    mesin3?: MesinType | null
-    gudangs?: GudangType[]
-    historiMesin?: HistoriMesinType[]
-    SPKBarangs?: SpkBarangType[]
-    SPKPhases?: SPKPhaseType[]
-    laporan?: LaporanType
-    PaletItem?: PaletItemType[]
+export interface SPK {
+    id: string;
+    code: string;
+    preprocessDeadline?: Date | null;
+    processDeadline?: Date | null;
+    finishingDeadline?: Date | null;
+    preprocessMachineId?: string | null;
+    processMachineId?: string | null;
+    finishingMachineId?: string | null;
+    startStage: ProcessStage;
+    preprocessStatus: PhaseStatus;
+    processStatus: PhaseStatus;
+    finishingStatus: PhaseStatus;
+    preprocessStartDate?: Date | null;
+    processStartDate?: Date | null;
+    finishingStartDate?: Date | null;
+    createdAt: Date;
+    updatedAt: Date;
+    preprocessMachine?: Machine | null;
+    processMachine?: Machine | null;
+    finishingMachine?: Machine | null;
+    salesOrder?: SalesOrder;
+    salesOrderId: string;
+    storageItems?: Storage[];
+    machineHistory?: MachineHistory[];
+    productionItems?: ProductionItem[];
+    phases?: SPK_Phase[];
+    report?: Report;
+    palletItems?: PalletItem[];
 }
 
-export interface SPKPhaseType {
-    id: string
-    spk_id: string
-    spk?: SPKType
-    stage: ProcessStage
-    target_quantity: number
-    planned_waste: number
-    actual_quantity: number
-    actual_waste: number
-    inventory_used: number
-    barang_id: string
-    barang?: BarangType
-    start_date?: Date | null
-    completion_date?: Date | null
-    status: PhaseStatus
-    createdAt: Date
-    updatedAt: Date
+export interface SPK_Phase {
+    id: string;
+    productionOrder?: SPK;
+    productionOrderId: string;
+    stage: ProcessStage;
+    targetQuantity: number;
+    plannedWaste: number;
+    actualQuantity: number;
+    actualWaste: number;
+    storageUsed: number;
+    productId: string;
+    product?: Product;
+    startDate?: Date | null;
+    completionDate?: Date | null;
+    status: PhaseStatus;
+    createdAt: Date;
+    updatedAt: Date;
 }
 
-export interface LaporanType {
-    id: string
-    preprocess_details?: string | null
-    process_details?: string | null
-    finishing_details?: string | null
-    tanggal_selesai_preprocess?: Date | null
-    tanggal_selesai_process?: Date | null
-    tanggal_selesai_finishing?: Date | null
-    preprocess_summary?: any | null
-    process_summary?: any | null
-    finishing_summary?: any | null
-    createdAt: Date
-    updatedAt: Date
-    spk_id: string
-    spk?: SPKType
-    LaporanBarang?: LaporanBarangType[]
+export interface Report {
+    id: string;
+    preprocessDetails?: string | null;
+    processDetails?: string | null;
+    finishingDetails?: string | null;
+    preprocessCompletionDate?: Date | null;
+    processCompletionDate?: Date | null;
+    finishingCompletionDate?: Date | null;
+    preprocessSummary?: any | null;
+    processSummary?: any | null;
+    finishingSummary?: any | null;
+    createdAt: Date;
+    updatedAt: Date;
+    productionOrderId: string;
+    productionOrder?: SPK;
+    reportItems?: ReportItem[];
 }
 
-export interface LaporanBarangType {
-    id: string
-    laporan_id: string
-    laporan?: LaporanType
-    barang_id?: string | null
-    barang?: BarangType | null
-    fase: ProcessStage
-    tipe: ItemType
-    quantity: number
-    waste_quantity: number
-    inventory_used: number
-    keterangan?: string | null
+export interface ReportItem {
+    id: string;
+    reportId: string;
+    report?: Report;
+    productId?: string | null;
+    product?: Product | null;
+    phase: ProcessStage;
+    itemType: ItemType;
+    quantity: number;
+    wasteQuantity: number;
+    storageUsed: number;
+    notes?: string | null;
 }
 
-export interface GudangType {
-    id: string
-    stock: number
-    waste_stock: number
-    barangId: string
-    barang?: BarangType
-    spk_id?: string | null
-    spk?: SPKType | null
-    production_stage?: ProcessStage | null
-    is_waste: boolean
-    createdAt: Date
-    updatedAt: Date
-    PaletItem?: PaletItemType[]
+export interface Storage {
+    id: string;
+    stock: number;
+    wasteStock: number;
+    productId: string;
+    product?: Product;
+    productionOrderId?: string | null;
+    productionOrder?: SPK | null;
+    productionStage?: ProcessStage | null;
+    isWaste: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+    palletItems?: PalletItem[];
 }
 
-export interface BarangType {
-    id: string
-    nama: string
-    tipe: ItemType
-    harga: number
-    createdAt: Date
-    updatedAt: Date
-    salesOrders?: SalesOrderBarangType[]
-    spkPhases?: SPKPhaseType[]
-    Gudang?: GudangType[]
-    spkBarangInput?: SpkBarangType[]
-    spkBarangOutput?: SpkBarangType[]
-    LaporanBarang?: LaporanBarangType[]
+export interface Product {
+    id: string;
+    name: string;
+    type: ItemType;
+    price: number;
+    createdAt: Date;
+    updatedAt: Date;
+    salesOrderItems?: SalesOrderItem[];
+    productionPhases?: SPK_Phase[];
+    storageItems?: Storage[];
+    inputItems?: ProductionItem[];
+    outputItems?: ProductionItem[];
+    reportItems?: ReportItem[];
 }
 
-export interface SalesOrderBarangType {
-    id: string
-    salesOrderId: string
-    salesOrder?: SalesOrderType
-    barangId?: string | null
-    Barang?: BarangType | null
-    quantity: number
+export interface SalesOrderItem {
+    id: string;
+    salesOrderId: string;
+    salesOrder?: SalesOrder;
+    productId?: string | null;
+    product?: Product | null;
+    quantity: number;
 }
 
-export interface MesinType {
-    id: string
-    Nama: string
-    Detail: string
-    type: ProcessStage
-    createdAt: Date
-    updatedAt: Date
-    HistoriMesin?: HistoriMesinType[]
-    spkMesinPreprocess?: SPKType[]
-    spkMesinProcess?: SPKType[]
-    spkMesinFinishing?: SPKType[]
+export interface Machine {
+    id: string;
+    name: string;
+    details: string;
+    type: ProcessStage;
+    createdAt: Date;
+    updatedAt: Date;
+    history?: MachineHistory[];
+    preprocessOrders?: SPK[];
+    processOrders?: SPK[];
+    finishingOrders?: SPK[];
 }
 
-export interface SpkBarangType {
-    id: string
-    spkId: string
-    spk?: SPKType
-    barang_input_Id: string
-    barang?: BarangType
-    barang_output_Id: string
-    barang_output?: BarangType
-    tipe: number
-    quantity_input: number
-    quantity_output: number
+export interface ProductionItem {
+    id: string;
+    productionOrderId: string;
+    productionOrder?: SPK;
+    inputProductId: string;
+    inputProduct?: Product;
+    outputProductId: string;
+    outputProduct?: Product;
+    type: number;
+    inputQuantity: number;
+    outputQuantity: number;
 }
 
-export interface HistoriMesinType {
-    id: string
-    mesinId: string
-    sPKId: string
-    Mesin?: MesinType
-    SPK?: SPKType
-    createdAt: Date
-    updatedAt: Date
-    status: number
-    detail: string
+export interface MachineHistory {
+    id: string;
+    machineId: string;
+    productionOrderId: string;
+    machine?: Machine;
+    productionOrder?: SPK;
+    createdAt: Date;
+    updatedAt: Date;
+    status: number;
+    details: string;
 }
 
-export interface PaletType {
-    id: string
-    code: string
-    status: PaletStatus
-    qrcode_data: string
-    sales_order_id: string
-    salesOrder?: SalesOrderType
-    createdAt: Date
-    updatedAt: Date
-    paletItems?: PaletItemType[]
+export interface Pallet {
+    id: string;
+    code: string;
+    status: PalletStatus;
+    qrCodeData: string;
+    salesOrderId: string;
+    salesOrder?: SalesOrder;
+    createdAt: Date;
+    updatedAt: Date;
+    items?: PalletItem[];
 }
 
-export interface PaletItemType {
-    id: string
-    quantity: number
-    palet_id: string
-    palet?: PaletType
-    item_id: string
-    gudang?: GudangType
-    spk_id: string
-    spk?: SPKType
-    createdAt: Date
-    updatedAt: Date
+export interface PalletItem {
+    id: string;
+    quantity: number;
+    palletId: string;
+    pallet?: Pallet;
+    storageItemId: string;
+    storageItem?: Storage;
+    productionOrderId: string;
+    productionOrder?: SPK;
+    createdAt: Date;
+    updatedAt: Date;
 }
