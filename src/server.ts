@@ -4,10 +4,10 @@ import salesOrderRoute from './routes/salesOrder.route'
 import gudangRoutes from './routes/gudang.route'
 import machineRouter from './routes/machine.route'
 import spkRoutes from './routes/spk.route'
-import barangRoutes from './routes/barang.route'
+import itemRoutes from './routes/item.route'
 import laporanRoutes from './routes/Laporan.route'
 import notFoundHandler from './middlewares/notFound.middleware'
-import { printServerBanner, routeLogger, setPort} from './middlewares/routeLogger.middleware'
+import { printServerBanner, routeLogger, setPort} from './middlewares/routelogger.middleware'
 import cors from 'cors'
 import colors from 'colors'
 
@@ -35,7 +35,7 @@ const apiV1Router = express.Router()
 // apiV1Router.use('/sales-order', salesOrderRoute)
 // apiV1Router.use('/storage', gudangRoutes)
 apiV1Router.use('/machine', machineRouter)
-// apiV1Router.use('/product', barangRoutes)
+apiV1Router.use('/item', itemRoutes)
 // apiV1Router.use('/production-order', spkRoutes)
 // apiV1Router.use('/report', laporanRoutes)
 

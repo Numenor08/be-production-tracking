@@ -218,7 +218,7 @@ export const getMachineStats = async (req: Request, res: Response): Promise<any>
         const history = await prisma.machineHistory.findMany({
             where: { machineId: id },
             include: {
-                productionOrder: true,
+                spk: true,
             },
             orderBy: {
                 createdAt: 'desc',
