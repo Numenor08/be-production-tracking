@@ -98,12 +98,18 @@ export const getItemById = async (req: Request, res: Response): Promise<any> => 
 export const createItem = async (req: Request, res: Response): Promise<any> => {
     try {
         const { name, type, price } = req.body
+        
+        if ((type === ItemType.MATERIAL || type === ItemType.PRODUCT) && price === undefined) {
+            return res.status(400).json(
+                errorResponse('Price is required for MATERIAL and PRODUCT items')
+            )
+        }
 
         const item = await prisma.item.create({
             data: {
                 name,
                 type: type as ItemType,
-                price: Number(price),
+                price: price !== undefined ? Number(price) : null,
             },
         })
 
@@ -121,13 +127,19 @@ export const updateItem = async (req: Request, res: Response): Promise<any> => {
         const { id } = req.params
         const { name, type, price } = req.body
 
-        // Check if item exists
         const existing = await prisma.item.findUnique({ where: { id } })
         if (!existing) {
             return res.status(404).json(errorResponse('Item not found'))
         }
+        
+        if ((type === ItemType.MATERIAL || type === ItemType.PRODUCT) && 
+            price === undefined && 
+            existing.price === null) {
+            return res.status(400).json(
+                errorResponse('Price is required when changing to MATERIAL or PRODUCT type')
+            )
+        }
 
-        // Update item
         const updated = await prisma.item.update({
             where: { id },
             data: {

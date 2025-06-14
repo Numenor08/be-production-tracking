@@ -14,10 +14,21 @@ export const createItemValidation = [
         .custom(isValidItemType)
         .withMessage('Item type must be MATERIAL, SEMI_FINISHED, or PRODUCT'),
     body('price')
-        .notEmpty()
-        .withMessage('Item price is required')
+        .optional()
         .isInt({ min: 0 })
-        .withMessage('Price must be a positive number'),
+        .withMessage('Price must be a positive number')
+        .custom((value, { req }) => {
+            const type = req.body.type
+            if (
+                (type === ItemType.MATERIAL || type === ItemType.PRODUCT) &&
+                value === undefined
+            ) {
+                throw new Error(
+                    'Price is required for MATERIAL and PRODUCT items',
+                )
+            }
+            return true
+        }),
 ]
 
 export const updateItemValidation = [

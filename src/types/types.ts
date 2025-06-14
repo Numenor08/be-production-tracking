@@ -145,7 +145,7 @@ export interface Item {
     id: string;
     name: string;
     type: ItemType;
-    price: number;
+    price?: number | null;
     createdAt: Date;
     updatedAt: Date;
     salesOrderItems?: SalesOrderItem[];

@@ -195,7 +195,7 @@ model Item {
   id              String   @id @default(cuid())
   name            String
   type            ItemType
-  price           Int
+  price           Int?
 
   salesOrderItems SalesOrderItem[]
   productionPhases SPK_Phase[]

@@ -32,7 +32,7 @@ app.use(routeLogger);
 
 const apiV1Router = express.Router()
 
-// apiV1Router.use('/sales-order', salesOrderRoute)
+apiV1Router.use('/sales-order', salesOrderRoute)
 // apiV1Router.use('/storage', gudangRoutes)
 apiV1Router.use('/machine', machineRouter)
 apiV1Router.use('/item', itemRoutes)
