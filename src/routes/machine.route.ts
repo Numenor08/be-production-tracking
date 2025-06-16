@@ -46,4 +46,10 @@ router.delete(
     machineController.deleteMachine,
 )
 
+router.get(
+    '/:id/history',
+    validate(machineIdValidation),
+    machineController.getMachineHistory,
+)
+
 export default router

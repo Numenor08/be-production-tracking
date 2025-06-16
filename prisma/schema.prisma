@@ -268,7 +268,7 @@ model MachineHistory {
   machineId            String
   spkId                String
 
-  machine              Machine @relation(fields: [machineId], references: [id])
+  machine              Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
   spk                  SPK @relation(fields: [spkId], references: [id])
 
   createdAt            DateTime @default(now())

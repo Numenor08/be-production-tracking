@@ -302,6 +302,71 @@ export const getMachineStats = async (
     }
 }
 
+export const getMachineHistory = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
+    try {
+        const { id } = req.params
+        const page = Number(req.query.page) || 1
+        const limit = Number(req.query.limit) || 10
+        
+        // Check if machine exists
+        const machine = await prisma.machine.findUnique({
+            where: { id }
+        })
+        
+        if (!machine) {
+            return res.status(404).json(errorResponse('Machine not found'))
+        }
+        
+        // Get total count for pagination
+        const totalCount = await prisma.machineHistory.count({
+            where: { machineId: id }
+        })
+        
+        const totalPages = Math.ceil(totalCount / limit)
+        const skip = (page - 1) * limit
+        
+        // Fetch machine history with related data
+        const history = await prisma.machineHistory.findMany({
+            where: { machineId: id },
+            skip,
+            take: limit,
+            orderBy: { createdAt: 'desc' },
+            include: {
+                spk: {
+                    select: {
+                        id: true,
+                        code: true,
+                        salesOrder: {
+                            select: {
+                                id: true,
+                                code: true,
+                                customerName: true
+                            }
+                        }
+                    }
+                }
+            }
+        })
+        
+        return res.json(
+            successResponse(history, 'Machine history retrieved successfully', {
+                pagination: {
+                    page,
+                    limit,
+                    totalItems: totalCount,
+                    totalPages
+                }
+            })
+        )
+    } catch (error) {
+        console.error('Error in getMachineHistory:', error)
+        return res.status(500).json(errorResponse('Failed to retrieve machine history'))
+    }
+}
+
 export default {
     getAllMachines,
     getMachineById,
@@ -309,4 +374,5 @@ export default {
     updateMachine,
     deleteMachine,
     getMachineStats,
+    getMachineHistory
 }
