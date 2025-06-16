@@ -6,7 +6,10 @@ import { generateSOCode } from '../libs/generate'
 
 const prisma = new PrismaClient()
 
-export const getAllSalesOrders = async (req: Request, res: Response): Promise<any> => {
+export const getAllSalesOrders = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
@@ -107,7 +110,10 @@ export const getAllSalesOrders = async (req: Request, res: Response): Promise<an
     }
 }
 
-export const getSalesOrderById = async (req: Request, res: Response): Promise<any> => {
+export const getSalesOrderById = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 
@@ -208,11 +214,13 @@ export const getSalesOrderById = async (req: Request, res: Response): Promise<an
     }
 }
 
-export const createSalesOrder = async (req: Request, res: Response): Promise<any> => {
+export const createSalesOrder = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const {
             customerName,
-            totalPrice,
             completionDate,
             deliveryDate,
             items,
@@ -254,15 +262,38 @@ export const createSalesOrder = async (req: Request, res: Response): Promise<any
                     }),
                 )
             }
-            
-            const itemsWithoutPrice = foundItems.filter(item => item.price === null)
+
+            const itemsWithoutPrice = foundItems.filter(
+                (item) => item.price === null,
+            )
             if (itemsWithoutPrice.length > 0) {
                 return res.status(400).json(
                     errorResponse('All products must have prices', {
-                        itemsWithoutPrice: itemsWithoutPrice.map(i => i.name),
+                        itemsWithoutPrice: itemsWithoutPrice.map((i) => i.name),
                     }),
                 )
             }
+        }
+
+        let totalPrice = 0
+        for (const item of items || []) {
+            const foundItem = await prisma.item.findUnique({
+                where: { id: item.itemId },
+                select: { price: true },
+            })
+
+            if (!foundItem || foundItem.price === null || foundItem.price < 0) {
+                return res
+                    .status(400)
+                    .json(errorResponse('Invalid item price'))
+            }
+
+            totalPrice += foundItem.price * item.quantity
+        }
+        if (totalPrice < 0) {
+            return res
+                .status(400)
+                .json(errorResponse('Invalid total price calculation'))
         }
 
         const newSalesOrder = await prisma.salesOrder.create({
@@ -305,7 +336,10 @@ export const createSalesOrder = async (req: Request, res: Response): Promise<any
     }
 }
 
-export const updateSalesOrder = async (req: Request, res: Response): Promise<any> => {
+export const updateSalesOrder = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
         const {
@@ -371,7 +405,10 @@ export const updateSalesOrder = async (req: Request, res: Response): Promise<any
     }
 }
 
-export const updateSalesOrderItems = async (req: Request, res: Response): Promise<any> => {
+export const updateSalesOrderItems = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
         const { items } = req.body
@@ -420,12 +457,14 @@ export const updateSalesOrderItems = async (req: Request, res: Response): Promis
                     }),
                 )
             }
-            
-            const itemsWithoutPrice = foundItems.filter(item => item.price === null)
+
+            const itemsWithoutPrice = foundItems.filter(
+                (item) => item.price === null,
+            )
             if (itemsWithoutPrice.length > 0) {
                 return res.status(400).json(
                     errorResponse('All products must have prices', {
-                        itemsWithoutPrice: itemsWithoutPrice.map(i => i.name),
+                        itemsWithoutPrice: itemsWithoutPrice.map((i) => i.name),
                     }),
                 )
             }
@@ -476,7 +515,10 @@ export const updateSalesOrderItems = async (req: Request, res: Response): Promis
     }
 }
 
-export const deleteSalesOrder = async (req: Request, res: Response): Promise<any> => {
+export const deleteSalesOrder = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 
@@ -536,7 +578,10 @@ export const deleteSalesOrder = async (req: Request, res: Response): Promise<any
     }
 }
 
-export const getSalesOrderProgress = async (req: Request, res: Response): Promise<any> => {
+export const getSalesOrderProgress = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 

@@ -6,7 +6,10 @@ import { successResponse, errorResponse } from '../utils/api.utils'
 const prisma = new PrismaClient()
 
 // Get all machines with pagination and filtering
-export const getAllMachines = async (req: Request, res: Response): Promise<any> => {
+export const getAllMachines = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
@@ -83,7 +86,10 @@ export const getAllMachines = async (req: Request, res: Response): Promise<any> 
 }
 
 // Get machine by ID
-export const getMachineById = async (req: Request, res: Response): Promise<any> => {
+export const getMachineById = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 
@@ -109,7 +115,10 @@ export const getMachineById = async (req: Request, res: Response): Promise<any> 
 }
 
 // Create new machine
-export const createMachine = async (req: Request, res: Response): Promise<any> => {
+export const createMachine = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { name, details, type } = req.body
 
@@ -131,7 +140,10 @@ export const createMachine = async (req: Request, res: Response): Promise<any> =
 }
 
 // Update machine
-export const updateMachine = async (req: Request, res: Response): Promise<any> => {
+export const updateMachine = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
         const { name, details, type } = req.body
@@ -160,7 +172,10 @@ export const updateMachine = async (req: Request, res: Response): Promise<any> =
 }
 
 // Delete machine
-export const deleteMachine = async (req: Request, res: Response): Promise<any> => {
+export const deleteMachine = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 
@@ -204,7 +219,10 @@ export const deleteMachine = async (req: Request, res: Response): Promise<any> =
 }
 
 // Get machine usage statistics
-export const getMachineStats = async (req: Request, res: Response): Promise<any> => {
+export const getMachineStats = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 

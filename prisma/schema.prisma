@@ -58,8 +58,8 @@ model SalesOrder {
 
   items           SalesOrderItem[]
   spk             SPK[]
-  status          OrderStatus      @default(IDLE)
   pallets         Pallet[]
+  status          OrderStatus      @default(IDLE)
 }
 
 model SPK {
@@ -89,7 +89,7 @@ model SPK {
   processMachine           Machine? @relation("ProcessMachine", fields: [processMachineId], references: [id])
   finishingMachine         Machine? @relation("FinishingMachine", fields: [finishingMachineId], references: [id])
 
-  salesOrder               SalesOrder    @relation(fields: [salesOrderId], references: [id])
+  salesOrder               SalesOrder    @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   salesOrderId             String
   storageItems             Storage[]
   machineHistory           MachineHistory[]
@@ -151,44 +151,51 @@ model Report {
 }
 
 model ReportItem {
-  id              String @id @default(cuid())
-
-  report          Report @relation(fields: [reportId], references: [id])
+  id              String      @id @default(cuid())
+  
+  report          Report      @relation(fields: [reportId], references: [id])
   reportId        String
-
-  item            Item? @relation(fields: [itemId], references: [id])
-  itemId         String?
-
+  
+  item            Item        @relation(fields: [itemId], references: [id])
+  itemId          String
+  
+  storage         Storage?    @relation(fields: [storageId], references: [id])
+  storageId       String?
+  
   phase           ProcessStage
-  itemType        ItemType
-
   quantity        Int
-  wasteQuantity   Int
-  storageUsed     Int
-
+  wasteQuantity   Int         @default(0)
+  
+  storageUsed     Int         @default(0)
+  
   notes           String?
 
-  @@unique([reportId, itemId, phase])
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 }
 
 model Storage {
-  id              String @id @default(cuid())
-  stock           Int
-  wasteStock      Int    @default(0)
-
-  itemId         String
-  item           Item @relation(fields: [itemId], references: [id])
-
-  spkId             String?
-  spk               SPK? @relation(fields: [spkId], references: [id])
-  productionStage   ProcessStage?
-
-  isWaste         Boolean @default(false)
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
-  palletItems     PalletItem[]
+  id                String      @id @default(cuid())
+  spk               SPK         @relation(fields: [spkId], references: [id])
+  spkId             String
+  
+  item              Item        @relation(fields: [itemId], references: [id])
+  itemId            String
+  
+  productionStage   ProcessStage
+  stock             Int         @default(0)
+  wasteStock        Int         @default(0)
+  
+  isWaste           Boolean     @default(false)
+  
+  reportItems       ReportItem[]
+  
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  
+  palletItems       PalletItem[]
+  
+  @@unique([spkId, itemId, productionStage, isWaste])
 }
 
 model Item {
@@ -211,13 +218,15 @@ model Item {
 model SalesOrderItem {
   id              String @id @default(cuid())
 
-  salesOrder      SalesOrder @relation(fields: [salesOrderId], references: [id])
+  salesOrder      SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   salesOrderId    String
 
   item            Item? @relation(fields: [itemId], references: [id])
   itemId         String?
 
   quantity        Int
+  remainingQuantity Int @default(0)
+  fullyPlanned      Boolean @default(false)
 
   @@unique([salesOrderId, itemId])
 }
@@ -247,9 +256,11 @@ model ProductionItem {
   outputItem           Item @relation("OutputItem", fields: [outputItemId], references: [id])
   outputItemId         String
 
-  type                 Int
+  type                 ItemType
   inputQuantity        Int
   outputQuantity       Int
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 model MachineHistory {
@@ -271,10 +282,10 @@ model MachineHistory {
 model Pallet {
   id                   String      @id @default(cuid())
   code                 String      @unique
-  status               PalletStatus @default(READY) // READY, SHIPPED
+  status               PalletStatus @default(READY)
   qrCodeData           String      @unique
-  salesOrderId         String
-  salesOrder           SalesOrder  @relation(fields: [salesOrderId], references: [id])
+  salesOrderId         String?
+  salesOrder           SalesOrder?  @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
 

@@ -21,7 +21,9 @@ export const routeLogger = (
     res: Response,
     next: NextFunction,
 ): void => {
-    console.log(`${req.method} ${req.originalUrl} - ${new Date().toISOString()}`.cyan)
+    console.log(
+        `${req.method} ${req.originalUrl} - ${new Date().toISOString()}`.cyan,
+    )
 
     next()
 }

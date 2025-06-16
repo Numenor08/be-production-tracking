@@ -11,11 +11,6 @@ export const createSalesOrderValidation = [
         .notEmpty()
         .withMessage('Customer name is required')
         .trim(),
-    body('totalPrice')
-        .notEmpty()
-        .withMessage('Total price is required')
-        .isInt({ min: 0 })
-        .withMessage('Total price must be a positive number'),
     body('completionDate')
         .notEmpty()
         .withMessage('Completion date is required')
@@ -39,10 +34,6 @@ export const updateSalesOrderValidation = [
         .notEmpty()
         .withMessage('Customer name cannot be empty')
         .trim(),
-    body('totalPrice')
-        .optional()
-        .isInt({ min: 0 })
-        .withMessage('Total price must be a positive number'),
     body('completionDate')
         .optional()
         .isISO8601()

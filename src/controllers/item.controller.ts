@@ -5,7 +5,10 @@ import { ItemType } from '../types/types'
 
 const prisma = new PrismaClient()
 
-export const getAllItems = async (req: Request, res: Response): Promise<any> => {
+export const getAllItems = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
@@ -68,7 +71,10 @@ export const getAllItems = async (req: Request, res: Response): Promise<any> => 
     }
 }
 
-export const getItemById = async (req: Request, res: Response): Promise<any> => {
+export const getItemById = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 
@@ -98,11 +104,18 @@ export const getItemById = async (req: Request, res: Response): Promise<any> => 
 export const createItem = async (req: Request, res: Response): Promise<any> => {
     try {
         const { name, type, price } = req.body
-        
-        if ((type === ItemType.MATERIAL || type === ItemType.PRODUCT) && price === undefined) {
-            return res.status(400).json(
-                errorResponse('Price is required for MATERIAL and PRODUCT items')
-            )
+
+        if (
+            (type === ItemType.MATERIAL || type === ItemType.PRODUCT) &&
+            price === undefined
+        ) {
+            return res
+                .status(400)
+                .json(
+                    errorResponse(
+                        'Price is required for MATERIAL and PRODUCT items',
+                    ),
+                )
         }
 
         const item = await prisma.item.create({
@@ -131,13 +144,19 @@ export const updateItem = async (req: Request, res: Response): Promise<any> => {
         if (!existing) {
             return res.status(404).json(errorResponse('Item not found'))
         }
-        
-        if ((type === ItemType.MATERIAL || type === ItemType.PRODUCT) && 
-            price === undefined && 
-            existing.price === null) {
-            return res.status(400).json(
-                errorResponse('Price is required when changing to MATERIAL or PRODUCT type')
-            )
+
+        if (
+            (type === ItemType.MATERIAL || type === ItemType.PRODUCT) &&
+            price === undefined &&
+            existing.price === null
+        ) {
+            return res
+                .status(400)
+                .json(
+                    errorResponse(
+                        'Price is required when changing to MATERIAL or PRODUCT type',
+                    ),
+                )
         }
 
         const updated = await prisma.item.update({
@@ -171,13 +190,11 @@ export const deleteItem = async (req: Request, res: Response): Promise<any> => {
             where: { itemId: id },
         })
         if (usedInStorage) {
-            return res
-                .status(400)
-                .json(
-                    errorResponse('Cannot delete item that is in storage', {
-                        storageId: usedInStorage.id,
-                    }),
-                )
+            return res.status(400).json(
+                errorResponse('Cannot delete item that is in storage', {
+                    storageId: usedInStorage.id,
+                }),
+            )
         }
 
         const usedInSalesOrder = await prisma.salesOrderItem.findFirst({
@@ -204,7 +221,10 @@ export const deleteItem = async (req: Request, res: Response): Promise<any> => {
     }
 }
 
-export const getItemStock = async (req: Request, res: Response): Promise<any> => {
+export const getItemStock = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
     try {
         const { id } = req.params
 
@@ -243,8 +263,7 @@ export const getItemStock = async (req: Request, res: Response): Promise<any> =>
             if (!acc[source]) {
                 acc[source] = {
                     spkId: item.spkId,
-                    spkCode:
-                        item.spk?.code || 'Unknown',
+                    spkCode: item.spk?.code || 'Unknown',
                     stock: 0,
                     wasteStock: 0,
                 }

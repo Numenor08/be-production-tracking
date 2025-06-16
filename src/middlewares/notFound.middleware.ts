@@ -5,17 +5,19 @@ import colors from 'colors'
 colors.enable()
 
 export const notFoundHandler = (
-    req: Request, 
-    res: Response, 
-    _next: NextFunction
+    req: Request,
+    res: Response,
+    _next: NextFunction,
 ): void => {
-    console.log(`${req.method} ${req.originalUrl} - ${new Date().toISOString()}`.red)
+    console.log(
+        `${req.method} ${req.originalUrl} - ${new Date().toISOString()}`.red,
+    )
     res.status(404).json(
         errorResponse(`Resource not found: ${req.method} ${req.originalUrl}`, {
             path: req.originalUrl,
             method: req.method,
-            timestamp: new Date().toISOString()
-        })
+            timestamp: new Date().toISOString(),
+        }),
     )
 }
 

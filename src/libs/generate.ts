@@ -6,7 +6,7 @@ export async function generateSOCode() {
     const now = new Date()
     const yearMonth =
         now.getFullYear().toString().slice(-2) +
-        (now.getMonth() + 1).toString().padStart(2, '0') 
+        (now.getMonth() + 1).toString().padStart(2, '0')
 
     const lastOrder = await prisma.salesOrder.findFirst({
         where: {
