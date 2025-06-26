@@ -13,7 +13,7 @@ export const getAllSalesOrders = async (
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
-        const limit = Number(req.query.limit) || 25
+        const limit = Number(req.query.limit) || 30
         const search = req.query.search as string | undefined
         const sortBy = req.query.sortBy as string | undefined
         const sortOrder =
@@ -57,16 +57,20 @@ export const getAllSalesOrders = async (
             include: {
                 items: {
                     include: {
-                        item: true,
+                        item: {
+                            select: {
+                                id: true,
+                                name: true,
+                                type: true,
+                                price: true,
+                            },
+                        },
                     },
                 },
                 spk: {
                     select: {
                         id: true,
                         code: true,
-                        preprocessStatus: true,
-                        processStatus: true,
-                        finishingStatus: true,
                     },
                 },
                 pallets: {
@@ -74,6 +78,12 @@ export const getAllSalesOrders = async (
                         id: true,
                         code: true,
                         status: true,
+                    },
+                },
+                customer: {
+                    select: {
+                        id: true,
+                        name: true,
                     },
                 },
             },
@@ -122,32 +132,30 @@ export const getSalesOrderById = async (
             include: {
                 items: {
                     include: {
-                        item: true,
+                        item: {
+                            select: {
+                                id: true,
+                                name: true,
+                                type: true,
+                                price: true
+                            }
+                        }
                     },
                 },
                 spk: {
-                    include: {
-                        phases: {
-                            include: {
-                                item: true,
-                            },
-                        },
-                        report: true,
-                    },
+                    select: {
+                        id: true,
+                        code: true,
+                    }
                 },
                 pallets: {
-                    include: {
-                        items: {
-                            include: {
-                                storageItem: {
-                                    include: {
-                                        item: true,
-                                    },
-                                },
-                            },
-                        },
-                    },
+                    select: {
+                        id: true,
+                        code: true,
+                        status: true,
+                    }
                 },
+                customer: true,
             },
         })
 
@@ -155,56 +163,8 @@ export const getSalesOrderById = async (
             return res.status(404).json(errorResponse('Sales order not found'))
         }
 
-        // Calculate additional metrics
-        const totalItemsOrdered = salesOrder.items.reduce(
-            (sum, item) => sum + item.quantity,
-            0,
-        )
-        const totalItemsProduced = salesOrder.spk.reduce(
-            (sum, spk) =>
-                sum +
-                spk.phases
-                    .filter((phase) => phase.status === 'COMPLETED')
-                    .reduce(
-                        (phaseSum, phase) => phaseSum + phase.actualQuantity,
-                        0,
-                    ),
-            0,
-        )
-
-        const totalItemsPacked = salesOrder.pallets.reduce(
-            (sum, pallet) =>
-                sum +
-                pallet.items.reduce(
-                    (palletSum, item) => palletSum + item.quantity,
-                    0,
-                ),
-            0,
-        )
-
-        // Prepare statistics for response
-        const statistics = {
-            totalItemsOrdered,
-            totalItemsProduced,
-            totalItemsPacked,
-            productionProgress:
-                totalItemsOrdered > 0
-                    ? Math.round((totalItemsProduced / totalItemsOrdered) * 100)
-                    : 0,
-            packingProgress:
-                totalItemsOrdered > 0
-                    ? Math.round((totalItemsPacked / totalItemsOrdered) * 100)
-                    : 0,
-        }
-
         return res.json(
-            successResponse(
-                {
-                    ...salesOrder,
-                    statistics,
-                },
-                'Sales order retrieved successfully',
-            ),
+            successResponse(salesOrder, 'Sales order retrieved successfully'),
         )
     } catch (error) {
         console.error('Error in getSalesOrderById:', error)
@@ -219,12 +179,7 @@ export const createSalesOrder = async (
     res: Response,
 ): Promise<any> => {
     try {
-        const {
-            customerName,
-            completionDate,
-            deliveryDate,
-            items,
-        } = req.body
+        const { customerId, completionDate, deliveryDate, items } = req.body
 
         const code = await generateSOCode()
 
@@ -283,9 +238,7 @@ export const createSalesOrder = async (
             })
 
             if (!foundItem || foundItem.price === null || foundItem.price < 0) {
-                return res
-                    .status(400)
-                    .json(errorResponse('Invalid item price'))
+                return res.status(400).json(errorResponse('Invalid item price'))
             }
 
             totalPrice += foundItem.price * item.quantity
@@ -298,16 +251,17 @@ export const createSalesOrder = async (
 
         const newSalesOrder = await prisma.salesOrder.create({
             data: {
-                customerName,
+                customerId,
                 totalPrice,
                 code,
                 completionDate: new Date(completionDate),
-                deliveryDate: new Date(deliveryDate),
+                deliveryDate: deliveryDate ? new Date(deliveryDate) : undefined,
                 items: {
                     create:
                         items?.map((item: any) => ({
                             item: { connect: { id: item.itemId } },
-                            quantity: item.quantity,
+                            targetQuantity: item.quantity,
+                            remainingQuantity: item.quantity,
                         })) || [],
                 },
             },
@@ -342,13 +296,8 @@ export const updateSalesOrder = async (
 ): Promise<any> => {
     try {
         const { id } = req.params
-        const {
-            customerName,
-            totalPrice,
-            completionDate,
-            deliveryDate,
-            status,
-        } = req.body
+        const { customerId, totalPrice, completionDate, deliveryDate, status } =
+            req.body
 
         // Check if sales order exists
         const existing = await prisma.salesOrder.findUnique({
@@ -377,7 +326,7 @@ export const updateSalesOrder = async (
         const updated = await prisma.salesOrder.update({
             where: { id },
             data: {
-                customerName,
+                customerId,
                 totalPrice,
                 completionDate: completionDate
                     ? new Date(completionDate)
@@ -481,7 +430,8 @@ export const updateSalesOrderItems = async (
                         data: {
                             salesOrder: { connect: { id } },
                             item: { connect: { id: item.itemId } },
-                            quantity: item.quantity,
+                            targetQuantity: item.quantity,
+                            remainingQuantity: item.quantity,
                         },
                         include: {
                             item: true,
@@ -591,7 +541,11 @@ export const getSalesOrderProgress = async (
                 items: true,
                 spk: {
                     include: {
-                        phases: true,
+                        phases: {
+                            include: {
+                                spkItems: true,
+                            },
+                        },
                     },
                 },
                 pallets: {
@@ -608,7 +562,7 @@ export const getSalesOrderProgress = async (
 
         // Calculate progress percentages
         const totalItemsOrdered = salesOrder.items.reduce(
-            (sum, item) => sum + item.quantity,
+            (sum, item) => sum + item.actualQuantity,
             0,
         )
 

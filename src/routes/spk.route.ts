@@ -6,6 +6,11 @@ import {
     updateSPKValidation,
     spkIdValidation,
     spkPaginationValidation,
+    completeSPKPhaseValidation,
+    startSPKPhaseValidation,
+    getSPKPhaseByStageValidation,
+    deleteSPKPhaseValidation,
+    createSPKItemValidation,
 } from '../validations/spk.validation'
 
 const router = express.Router()
@@ -24,6 +29,35 @@ router.put(
 
 router.delete('/:id', validate(spkIdValidation), spkController.deleteSPK)
 
-router.put('/:id/phase-progress', spkController.updatePhaseProgress)
+router.put(
+    '/:id/phases/complete',
+    validate(completeSPKPhaseValidation),
+    spkController.completeSPKPhase,
+)
+
+router.get(
+    '/:id/phases',
+    validate(getSPKPhaseByStageValidation),
+    spkController.getSPKPhaseByStage,
+)
+
+router.put(
+    '/:id/phases',
+    validate(startSPKPhaseValidation),
+    spkController.startSPKPhase,
+)
+
+router.delete(
+    '/:id/phases/:phaseId',
+    validate(deleteSPKPhaseValidation),
+    spkController.deleteSPKPhase,
+)
+
+// Add the new route for creating SPK items
+router.post(
+    '/:id/items',
+    validate(createSPKItemValidation),
+    spkController.createSPKItem,
+)
 
 export default router

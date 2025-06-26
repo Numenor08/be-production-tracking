@@ -1,4 +1,5 @@
 import { PrismaClient } from '../../generated/prisma'
+import { ItemType } from '../types/types'
 
 const prisma = new PrismaClient()
 
@@ -56,4 +57,98 @@ export async function generateSPKCode(): Promise<string> {
     const sequencePart = nextSequence.toString().padStart(4, '0')
 
     return `${sequencePart}/SPK/${period}`
+}
+
+export const generatePalletCode = async (): Promise<string> => {
+    let attempt = 0
+    const maxAttempts = 5
+
+    while (attempt < maxAttempts) {
+        const date = new Date()
+        const year = date.getFullYear().toString().slice(2)
+        const month = (date.getMonth() + 1).toString().padStart(2, '0')
+        const day = date.getDate().toString().padStart(2, '0')
+
+        const random = Math.floor(1000 + Math.random() * 9000)
+
+        const code = `PLT-${year}${month}${day}-${random}`
+
+        const existing = await prisma.pallet.findFirst({
+            where: { code },
+        })
+
+        if (!existing) {
+            return code
+        }
+
+        attempt++
+    }
+
+    throw new Error('Failed to generate unique pallet code')
+}
+
+export const generateReportCode = async (spkId: string): Promise<string> => {
+    const date = new Date()
+    const year = date.getFullYear().toString().slice(-2)
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+
+    // Hitung berapa kali report sudah dibuat untuk spkID ini
+    const count = await prisma.report.count({
+        where: { spkId },
+    })
+
+    const sequence = (count + 1).toString().padStart(2, '0')
+
+    return `RPT-${spkId}-${year}${month}${day}-${sequence}`
+}
+
+export const generateItemCode = async (itemType: ItemType): Promise<string> => {
+    const date = new Date()
+    const year = date.getFullYear().toString().slice(-2)
+    const month = String(date.getMonth() + 1).toString().padStart(2, '0')
+    
+    // Map ItemType to a single character code
+    let typeCode: string
+    switch (itemType) {
+        case 'MATERIAL':
+            typeCode = 'M'
+            break
+        case 'SEMI_FINISHED':
+            typeCode = 'S'
+            break
+        case 'PRODUCT':
+            typeCode = 'P'
+            break
+        default:
+            typeCode = 'X' // Fallback code
+    }
+
+    // Find the last code with this format and type code
+    const lastItem = await prisma.item.findFirst({
+        where: {
+            code: {
+                startsWith: `ITEM-${typeCode}${year}${month}-`
+            },
+            type: itemType
+        },
+        orderBy: {
+            code: 'desc'
+        }
+    })
+
+    // Extract sequence number from existing code or start at 1
+    let sequence = 1
+    if (lastItem?.code) {
+        const parts = lastItem.code.split('-')
+        if (parts.length === 3) {
+            const lastSequence = parseInt(parts[2])
+            if (!isNaN(lastSequence)) {
+                sequence = lastSequence + 1
+            }
+        }
+    }
+
+    // Format the code with the sequence padded to 4 digits
+    return `ITEM-${typeCode}${year}${month}-${sequence.toString().padStart(4, '0')}`
 }

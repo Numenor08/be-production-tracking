@@ -1,17 +1,24 @@
 import express from 'express'
 import dotenv from 'dotenv'
+import session from 'express-session'
+import { PrismaSessionStore } from '@quixo3/prisma-session-store'
+import { PrismaClient } from '../generated/prisma'
 import salesOrderRoute from './routes/salesOrder.route'
 import storageRoute from './routes/storage.route'
 import machineRouter from './routes/machine.route'
 import spkRoutes from './routes/spk.route'
 import itemRoutes from './routes/item.route'
 import reportRoute from './routes/report.route'
+import palletRoute from './routes/pallet.route'
+import customerRoute from './routes/customer.route'
+import userRoute from './routes/user.route'
 import notFoundHandler from './middlewares/notFound.middleware'
 import {
     printServerBanner,
     routeLogger,
     setPort,
 } from './middlewares/routelogger.middleware'
+import { startSessionCleanup } from './utils/sessionCleanup'
 import cors from 'cors'
 import colors from 'colors'
 
@@ -19,14 +26,39 @@ dotenv.config()
 colors.enable()
 
 const app = express()
+const prisma = new PrismaClient()
 
 const port = process.env.PORT || 3000
 setPort(port)
 
 app.use(
     cors({
-        origin: 'http://localhost:3000',
+        origin: process.env.FRONTEND_URL || 'http://localhost:3000',
         credentials: true,
+    }),
+)
+
+// Session configuration with Prisma Store
+app.use(
+    session({
+        store: new PrismaSessionStore(
+            prisma,
+            {
+                checkPeriod: 2 * 60 * 1000, // 2 minutes - cleanup expired sessions
+                dbRecordIdIsSessionId: true,
+                dbRecordIdFunction: undefined,
+            }
+        ),
+        secret: process.env.SESSION_SECRET || 'your-secret-key-here-change-in-production',
+        resave: false,
+        saveUninitialized: false,
+        name: 'sessionId', // Custom session cookie name
+        cookie: {
+            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+            httpOnly: true, // Prevent XSS attacks
+            maxAge: 24 * 60 * 60 * 1000, // 24 hours
+            sameSite: 'strict', // CSRF protection
+        },
     }),
 )
 
@@ -36,12 +68,15 @@ app.use(routeLogger)
 
 const apiV1Router = express.Router()
 
+apiV1Router.use('/auth', userRoute)
+apiV1Router.use('/customer', customerRoute)
 apiV1Router.use('/sales-order', salesOrderRoute)
 apiV1Router.use('/storage', storageRoute)
 apiV1Router.use('/machine', machineRouter)
 apiV1Router.use('/item', itemRoutes)
 apiV1Router.use('/spk', spkRoutes)
 apiV1Router.use('/report', reportRoute)
+// apiV1Router.use('/pallet', palletRoute)
 
 app.use('/api/v1', apiV1Router)
 
@@ -61,4 +96,7 @@ app.use(notFoundHandler)
 
 app.listen(port, () => {
     printServerBanner()
+    
+    // Start session cleanup scheduler
+    startSessionCleanup()
 })

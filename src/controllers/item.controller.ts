@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { PrismaClient } from '../../generated/prisma'
 import { successResponse, errorResponse } from '../utils/api.utils'
 import { ItemType } from '../types/types'
+import { generateItemCode } from '../libs/generate'
 
 const prisma = new PrismaClient()
 
@@ -12,12 +13,13 @@ export const getAllItems = async (
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
-        const limit = Number(req.query.limit) || 10
+        const limit = Number(req.query.limit) || 50
         const search = req.query.search as string | undefined
         const sortBy = req.query.sortBy as string | undefined
         const sortOrder =
             (req.query.sortOrder as 'asc' | 'desc' | undefined) || 'asc'
         const type = req.query.type as ItemType | undefined
+        const includeStock = req.query.includeStock === 'true' // New parameter to control stock inclusion
 
         // Build where condition for filtering
         const where: any = {}
@@ -50,13 +52,96 @@ export const getAllItems = async (
             orderBy,
             skip,
             take: limit,
-            include: {
-                storageItems: true,
-            },
+            include: includeStock
+                ? {
+                      storageItems: true,
+                  }
+                : undefined,
         })
 
+        // If includeStock is true, calculate stock information for each item
+        let enhancedItems = items
+        if (includeStock) {
+            // Get all storage items for the fetched items to calculate total stock
+            const itemIds = items.map((item) => item.id)
+            const allStorageItems = await prisma.storage.findMany({
+                where: {
+                    itemId: { in: itemIds },
+                },
+                include: {
+                    spk: {
+                        select: {
+                            id: true,
+                            code: true,
+                        },
+                    },
+                },
+            })
+
+            // Group storage items by itemId
+            const stockByItemId: Record<
+                string,
+                {
+                    totalStock: number
+                    spkSources: Record<
+                        string,
+                        {
+                            spkId: string
+                            spkCode: string
+                            stock: number
+                        }
+                    >
+                }
+            > = {}
+
+            // Process all storage items to calculate stocks
+            for (const storageItem of allStorageItems) {
+                const itemId = storageItem.itemId
+                if (!itemId) continue
+
+                // Initialize if not exists
+                if (!stockByItemId[itemId]) {
+                    stockByItemId[itemId] = {
+                        totalStock: 0,
+                        spkSources: {},
+                    }
+                }
+
+                // Add to total stock
+                stockByItemId[itemId].totalStock += storageItem.stock
+
+                // Group by SPK
+                const spkId = storageItem.spkId || 'unknown'
+                if (!stockByItemId[itemId].spkSources[spkId]) {
+                    stockByItemId[itemId].spkSources[spkId] = {
+                        spkId: storageItem.spkId || 'unknown',
+                        spkCode: storageItem.spk?.code || 'Unknown',
+                        stock: 0,
+                    }
+                }
+
+                stockByItemId[itemId].spkSources[spkId].stock +=
+                    storageItem.stock
+            }
+
+            // Enhance items with stock information
+            enhancedItems = items.map((item) => {
+                const stockInfo = stockByItemId[item.id] || {
+                    totalStock: 0,
+                    spkSources: {},
+                }
+
+                return {
+                    ...item,
+                    totalStock: stockInfo.totalStock,
+                    stockSources: Object.values(stockInfo.spkSources),
+                    storageItems: undefined, // Remove raw storage items to keep response clean
+                }
+            })
+        }
+
         return res.json(
-            successResponse(items, 'Items retrieved successfully', {
+            successResponse(enhancedItems, 'Items retrieved successfully', {
                 pagination: {
                     page,
                     limit,
@@ -78,15 +163,21 @@ export const getItemById = async (
     try {
         const { id } = req.params
 
+        // Get the base item information
         const item = await prisma.item.findUnique({
             where: { id },
             include: {
-                storageItems: true,
-                salesOrderItems: true,
-                inputItems: true,
-                outputItems: true,
-                productionPhases: true,
-                reportItems: true,
+                salesOrderItems: {
+                    include: {
+                        salesOrder: {
+                            select: {
+                                id: true,
+                                code: true,
+                                status: true,
+                            },
+                        },
+                    },
+                },
             },
         })
 
@@ -94,12 +185,85 @@ export const getItemById = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        return res.json(successResponse(item, 'Item retrieved successfully'))
+        // Get storage information for this item
+        const storageItems = await prisma.storage.findMany({
+            where: { itemId: id },
+            include: {
+                spk: {
+                    select: {
+                        id: true,
+                        code: true,
+                        salesOrder: {
+                            select: {
+                                id: true,
+                                code: true,
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        // Calculate total stock
+        const totalStock = storageItems.reduce(
+            (sum, item) => sum + item.stock,
+            0,
+        )
+
+        // Group stock by production order (SPK)
+        const stockBySPK = storageItems.reduce((acc: any, item) => {
+            const spkId = item.spkId || 'unknown'
+
+            if (!acc[spkId]) {
+                acc[spkId] = {
+                    spkId: item.spkId,
+                    spkCode: item.spk?.code || 'Unknown',
+                    salesOrderId: item.spk?.salesOrder?.id,
+                    salesOrderCode: item.spk?.salesOrder?.code,
+                    stock: 0,
+                }
+            }
+
+            acc[spkId].stock += item.stock
+            return acc
+        }, {})
+
+        // Group by spk stage
+        const stockByStage = storageItems.reduce((acc: any, item) => {
+            const stage = item.spkStage || 'unknown'
+
+            if (!acc[stage]) {
+                acc[stage] = {
+                    stage: stage,
+                    stock: 0,
+                }
+            }
+
+            acc[stage].stock += item.stock
+            return acc
+        }, {})
+
+        // Create enhanced item with stock information
+        const enhancedItem = {
+            ...item,
+            stockInfo: {
+                totalStock,
+                stockBySPK: Object.values(stockBySPK),
+                stockByStage: Object.values(stockByStage),
+                storageItems,
+            },
+        }
+
+        return res.json(
+            successResponse(enhancedItem, 'Item retrieved successfully'),
+        )
     } catch (error) {
         console.error('Error in getItemById:', error)
         return res.status(500).json(errorResponse('Failed to retrieve item'))
     }
 }
+
+// Rest of your existing functions...
 
 export const createItem = async (req: Request, res: Response): Promise<any> => {
     try {
@@ -117,10 +281,24 @@ export const createItem = async (req: Request, res: Response): Promise<any> => {
                     ),
                 )
         }
+        
+        // Check if Name is exist
+        const existingItem = await prisma.item.findFirst({
+            where: { name, type: type as ItemType },
+        })
+
+        if (existingItem) {
+            return res
+                .status(400)
+                .json(errorResponse('Item with this name already exists'))
+        }
+
+        const code = await generateItemCode(type as ItemType)
 
         const item = await prisma.item.create({
             data: {
                 name,
+                code,
                 type: type as ItemType,
                 price: price !== undefined ? Number(price) : null,
             },
@@ -252,10 +430,6 @@ export const getItemStock = async (
             (sum, item) => sum + item.stock,
             0,
         )
-        const totalWasteStock = storageItems.reduce(
-            (sum, item) => sum + item.wasteStock,
-            0,
-        )
 
         // Group by production order
         const stockBySource = storageItems.reduce((acc: any, item) => {
@@ -269,7 +443,6 @@ export const getItemStock = async (
                 }
             }
             acc[source].stock += item.stock
-            acc[source].wasteStock += item.wasteStock
             return acc
         }, {})
 
@@ -278,7 +451,6 @@ export const getItemStock = async (
                 {
                     item: existing,
                     totalStock,
-                    totalWasteStock,
                     stockDetails: storageItems,
                     stockBySource: Object.values(stockBySource),
                 },

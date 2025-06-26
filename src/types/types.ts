@@ -1,6 +1,5 @@
 export enum OrderStatus {
     IN_PROGRESS = 'IN_PROGRESS',
-    SPLIT_PROCESSING = 'SPLIT_PROCESSING',
     COMPLETED = 'COMPLETED',
     IDLE = 'IDLE',
 }
@@ -169,11 +168,11 @@ export interface SalesOrderItem {
 }
 
 export interface Allocation {
-    storageId: string;
-    spkId: string;
-    itemId: string;
-    itemName: string;
-    quantity: number;
+    storageId: string
+    spkId: string
+    itemId: string
+    itemName: string
+    quantity: number
 }
 
 export interface Machine {

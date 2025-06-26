@@ -16,7 +16,7 @@ export const createItemValidation = [
     body('price')
         .optional()
         .isInt({ min: 0 })
-        .withMessage('Price must be a positive number')
+        .withMessage('Price must be a non-negative number')
         .custom((value, { req }) => {
             const type = req.body.type
             if (
@@ -44,7 +44,7 @@ export const updateItemValidation = [
     body('price')
         .optional()
         .isInt({ min: 0 })
-        .withMessage('Price must be a positive number'),
+        .withMessage('Price must be a non-negative number'),
 ]
 
 export const paginationValidation = [

@@ -1,0 +1,447 @@
+import { Request, Response } from 'express'
+import { PrismaClient, UserRole } from '../../generated/prisma'
+import bcrypt from 'bcryptjs'
+import { validationResult } from 'express-validator'
+import { errorResponse, successResponse } from '../utils/api.utils'
+
+const prisma = new PrismaClient()
+
+interface AuthRequest extends Request {
+    session: Request['session'] & {
+        user?: {
+            id: string
+            username: string
+            role: UserRole
+            firstName: string
+            lastName?: string
+            email: string
+        }
+    }
+}
+
+// Register new user
+export const register = async (req: Request, res: Response): Promise<void> => {
+    try {
+        // Check validation errors
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array(),
+            })
+            return
+        }
+
+        const { username, password, firstName, lastName, email, phone, role } = req.body
+
+        // Check if user already exists
+        const existingUser = await prisma.user.findFirst({
+            where: {
+                OR: [
+                    { username },
+                    { email },
+                ],
+            },
+        })
+
+        if (existingUser) {
+            res.status(409).json(errorResponse('User with this username or email already exists'))
+            return
+        }
+
+        // Hash password
+        const saltRounds = 12
+        const hashedPassword = await bcrypt.hash(password, saltRounds)
+
+        // Create user
+        const newUser = await prisma.user.create({
+            data: {
+                username,
+                password: hashedPassword,
+                firstName,
+                lastName: lastName || null,
+                email,
+                phone: phone || null,
+                role: role || 'OPERATOR',
+                isActive: true,
+            },
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                role: true,
+                isActive: true,
+                createdAt: true,
+            },
+        })
+
+        res.status(201).json(successResponse(newUser, 'User registered successfully'))
+    } catch (error) {
+        console.error('Registration error:', error)
+        res.status(500).json(errorResponse('Internal server error during registration'))
+    }
+}
+
+// Login user
+export const login = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        // Check validation errors
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            res.status(400).json(errorResponse('Validation failed', errors.array()))
+            return
+        }
+
+        const { username, password } = req.body
+
+        // Find user by username
+        const user = await prisma.user.findUnique({
+            where: { username },
+        })
+
+        if (!user) {
+            res.status(401).json({
+                success: false,
+                message: 'Invalid credentials',
+            })
+            return
+        }
+
+        // Check if user is active
+        if (!user.isActive) {
+            res.status(403).json(errorResponse('Account is deactivated. Please contact administrator.'))
+            return
+        }
+
+        // Verify password
+        const isPasswordValid = await bcrypt.compare(password, user.password)
+        if (!isPasswordValid) {
+            res.status(401).json(errorResponse('Invalid credentials'))
+            return
+        }
+
+        // Create session
+        req.session.user = {
+            id: user.id,
+            username: user.username,
+            role: user.role,
+            firstName: user.firstName,
+            lastName: user.lastName || undefined,
+            email: user.email,
+        }
+
+        res.status(200).json(successResponse({
+                user: {
+                    id: user.id,
+                    username: user.username,
+                    firstName: user.firstName,
+                    lastName: user.lastName,
+                    email: user.email,
+                    role: user.role,
+                },
+            }, 'Login successful'))
+    } catch (error) {
+        console.error('Login error:', error)
+        res.status(500).json(errorResponse('Internal server error during login'))
+    }
+}
+
+// Logout user
+export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        req.session.destroy((err) => {
+            if (err) {
+                console.error('Logout error:', err)
+                res.status(500).json(errorResponse('Error during logout'))
+                return
+            }
+
+            res.clearCookie('sessionId') // Custom session cookie name
+            res.status(200).json(successResponse(null, 'Logout successful'))
+        })
+    } catch (error) {
+        console.error('Logout error:', error)
+        res.status(500).json(errorResponse('Internal server error during logout'))
+    }
+}
+
+// Get current user profile
+export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const user = await prisma.user.findUnique({
+            where: { id: req.session.user!.id },
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                role: true,
+                isActive: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        })
+
+        if (!user) {
+            res.status(404).json(errorResponse('User not found'))
+            return
+        }
+
+        res.status(200).json(successResponse(user))
+    } catch (error) {
+        console.error('Get profile error:', error)
+        res.status(500).json(errorResponse('Internal server error'))
+    }
+}
+
+// Update user profile
+export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        // Check validation errors
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            res.status(400).json(errorResponse('Validation failed', {error: errors.array()}))
+            return
+        }
+
+        const userId = req.params.id || req.session.user!.id
+        const { firstName, lastName, email, phone } = req.body
+
+        // Check if email is already taken by another user
+        if (email) {
+            const existingUser = await prisma.user.findFirst({
+                where: {
+                    email,
+                    NOT: { id: userId },
+                },
+            })
+
+            if (existingUser) {
+                res.status(409).json(errorResponse('Email is already taken by another user'))
+                return
+            }
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: {
+                firstName: firstName || undefined,
+                lastName: lastName || undefined,
+                email: email || undefined,
+                phone: phone || undefined,
+            },
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                role: true,
+                isActive: true,
+                updatedAt: true,
+            },
+        })
+
+        // Update session if user updated their own profile
+        if (userId === req.session.user!.id) {
+            req.session.user = {
+                ...req.session.user!,
+                firstName: updatedUser.firstName,
+                lastName: updatedUser.lastName || undefined,
+                email: updatedUser.email,
+            }
+        }
+
+        res.status(200).json(successResponse(updatedUser, 'Profile updated successfully'))
+    } catch (error) {
+        console.error('Update profile error:', error)
+        res.status(500).json(errorResponse('Internal server error'))
+    }
+}
+
+// Change password
+export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        // Check validation errors
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            res.status(400).json(errorResponse('Validation failed', { errors: errors.array() }))
+            return
+        }
+
+        const { currentPassword, newPassword } = req.body
+        const userId = req.session.user!.id
+
+        // Get current user
+        const user = await prisma.user.findUnique({
+            where: { id: userId },
+        })
+
+        if (!user) {
+            res.status(404).json(errorResponse('User not found'))
+            return
+        }
+
+        // Verify current password
+        const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password)
+        if (!isCurrentPasswordValid) {
+            res.status(401).json(errorResponse('Current password is incorrect'))
+            return
+        }
+
+        // Hash new password
+        const saltRounds = 12
+        const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds)
+
+        // Update password
+        await prisma.user.update({
+            where: { id: userId },
+            data: { password: hashedNewPassword },
+        })
+
+        res.status(200).json(successResponse(null, 'Password changed successfully'))
+    } catch (error) {
+        console.error('Change password error:', error)
+        res.status(500).json(errorResponse('Internal server error'))
+    }
+}
+
+// Get all users (Admin only)
+export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const users = await prisma.user.findMany({
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                role: true,
+                isActive: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+            orderBy: { createdAt: 'desc' },
+        })
+
+        res.status(200).json(successResponse(users, 'Users retrieved successfully'))
+    } catch (error) {
+        console.error('Get all users error:', error)
+        res.status(500).json(errorResponse('Internal server error'))
+    }
+}
+
+// Update user by admin
+export const updateUserByAdmin = async (req: Request, res: Response): Promise<void> => {
+    try {
+        // Check validation errors
+        const errors = validationResult(req)
+        if (!errors.isEmpty()) {
+            res.status(400).json({
+                success: false,
+                message: 'Validation failed',
+                errors: errors.array(),
+            })
+            return
+        }
+
+        const { id } = req.params
+        const { firstName, lastName, email, phone, isActive, role } = req.body
+
+        // Check if email is already taken by another user
+        if (email) {
+            const existingUser = await prisma.user.findFirst({
+                where: {
+                    email,
+                    NOT: { id },
+                },
+            })
+
+            if (existingUser) {
+                res.status(409).json(errorResponse('Email is already taken by another user'))
+                return
+            }
+        }
+
+        const updatedUser = await prisma.user.update({
+            where: { id },
+            data: {
+                firstName: firstName || undefined,
+                lastName: lastName || undefined,
+                email: email || undefined,
+                phone: phone || undefined,
+                isActive: isActive !== undefined ? isActive : undefined,
+                role: role || undefined,
+            },
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                role: true,
+                isActive: true,
+                updatedAt: true,
+            },
+        })
+
+        res.status(200).json(successResponse(updatedUser, 'User updated successfully'))
+    } catch (error) {
+        console.error('Update user by admin error:', error)
+        res.status(500).json(errorResponse('Internal server error'))
+    }
+}
+
+// Get user by ID
+export const getUserById = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id } = req.params
+
+        const user = await prisma.user.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                email: true,
+                phone: true,
+                role: true,
+                isActive: true,
+                createdAt: true,
+                updatedAt: true,
+            },
+        })
+
+        if (!user) {
+            res.status(404).json(errorResponse('User not found'))
+            return
+        }
+
+        res.status(200).json(successResponse(user, 'User retrieved successfully'))
+    } catch (error) {
+        console.error('Get user by ID error:', error)
+        res.status(500).json(errorResponse('Internal server error'))
+    }
+}
+
+export default {
+    register,
+    login,
+    logout,
+    getProfile,
+    updateProfile,
+    changePassword,
+    getAllUsers,
+    updateUserByAdmin,
+    getUserById,
+}

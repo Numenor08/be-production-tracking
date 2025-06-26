@@ -11,9 +11,8 @@ export const getAllStorage = async (
 ): Promise<any> => {
     try {
         const page = Number(req.query.page) || 1
-        const limit = Number(req.query.limit) || 10
+        const limit = Number(req.query.limit) || 100
         const search = req.query.search as string | undefined
-        const isWaste = req.query.isWaste === 'true'
         const itemType = req.query.itemType as string | undefined
         const stage = req.query.stage as ProcessStage | undefined
 
@@ -25,10 +24,6 @@ export const getAllStorage = async (
                 { item: { name: { contains: search } } },
                 { spk: { code: { contains: search } } },
             ]
-        }
-
-        if (typeof isWaste === 'boolean') {
-            where.isWaste = isWaste
         }
 
         if (itemType) {
@@ -50,7 +45,14 @@ export const getAllStorage = async (
             skip,
             take: limit,
             include: {
-                item: true,
+                item: {
+                    select: {
+                        id: true,
+                        name: true,
+                        type: true,
+                        price: true,
+                    },
+                },
                 spk: {
                     select: {
                         id: true,
@@ -59,7 +61,6 @@ export const getAllStorage = async (
                             select: {
                                 id: true,
                                 code: true,
-                                customerName: true,
                             },
                         },
                     },
@@ -106,11 +107,6 @@ export const getStorageById = async (
                         salesOrder: true,
                     },
                 },
-                reportItems: {
-                    include: {
-                        report: true,
-                    },
-                },
             },
         })
 
@@ -134,8 +130,7 @@ export const createStorage = async (
     res: Response,
 ): Promise<any> => {
     try {
-        const { spkId, itemId, productionStage, stock, wasteStock, isWaste } =
-            req.body
+        const { spkId, itemId, spkStage, stock } = req.body
 
         // Check if SPK exists
         const spk = await prisma.sPK.findUnique({
@@ -158,11 +153,10 @@ export const createStorage = async (
         // Check if storage already exists
         const existingStorage = await prisma.storage.findUnique({
             where: {
-                spkId_itemId_productionStage_isWaste: {
+                spkId_itemId_spkStage: {
                     spkId,
                     itemId,
-                    productionStage,
-                    isWaste: isWaste || false,
+                    spkStage,
                 },
             },
         })
@@ -172,7 +166,7 @@ export const createStorage = async (
                 .status(400)
                 .json(
                     errorResponse(
-                        'Storage entry already exists for this SPK, item, stage, and waste status',
+                        'Storage entry already exists for this SPK, item, and stage status',
                     ),
                 )
         }
@@ -182,10 +176,8 @@ export const createStorage = async (
             data: {
                 spk: { connect: { id: spkId } },
                 item: { connect: { id: itemId } },
-                productionStage,
+                spkStage,
                 stock: stock || 0,
-                wasteStock: wasteStock || 0,
-                isWaste: isWaste || false,
             },
             include: {
                 item: true,
@@ -212,7 +204,7 @@ export const updateStorage = async (
 ): Promise<any> => {
     try {
         const { id } = req.params
-        const { stock, wasteStock } = req.body
+        const { stock } = req.body
 
         // Check if storage exists
         const existingStorage = await prisma.storage.findUnique({
@@ -228,10 +220,6 @@ export const updateStorage = async (
             where: { id },
             data: {
                 stock: stock !== undefined ? stock : existingStorage.stock,
-                wasteStock:
-                    wasteStock !== undefined
-                        ? wasteStock
-                        : existingStorage.wasteStock,
             },
             include: {
                 item: true,
@@ -392,71 +380,6 @@ export const transferStock = async (
     }
 }
 
-export const markAsWaste = async (
-    req: Request,
-    res: Response,
-): Promise<any> => {
-    try {
-        const { storageId, quantity, notes } = req.body
-
-        if (quantity <= 0) {
-            return res
-                .status(400)
-                .json(errorResponse('Waste quantity must be positive'))
-        }
-
-        const result = await prisma.$transaction(async (tx) => {
-            // Get storage item
-            const storage = await tx.storage.findUnique({
-                where: { id: storageId },
-                include: {
-                    spk: true,
-                    item: true,
-                },
-            })
-
-            if (!storage) {
-                throw new Error('Storage item not found')
-            }
-
-            if (storage.stock < quantity) {
-                throw new Error('Insufficient stock to mark as waste')
-            }
-
-            // Decrease regular stock
-            const updatedStorage = await tx.storage.update({
-                where: { id: storageId },
-                data: {
-                    stock: {
-                        decrement: quantity,
-                    },
-                    wasteStock: {
-                        increment: quantity,
-                    },
-                },
-            })
-
-            return updatedStorage
-        })
-
-        return res.json(
-            successResponse(
-                result,
-                `Successfully marked ${quantity} units as waste`,
-            ),
-        )
-    } catch (error) {
-        console.error('Error in markAsWaste:', error)
-        return res
-            .status(500)
-            .json(
-                errorResponse(
-                    `Failed to mark as waste: ${(error as Error).message}`,
-                ),
-            )
-    }
-}
-
 export const getStorageByItem = async (
     req: Request,
     res: Response,
@@ -485,7 +408,6 @@ export const getStorageByItem = async (
                             select: {
                                 id: true,
                                 code: true,
-                                customerName: true,
                             },
                         },
                     },
@@ -499,11 +421,6 @@ export const getStorageByItem = async (
             0,
         )
 
-        const totalWaste = storageItems.reduce(
-            (sum, item) => sum + item.wasteStock,
-            0,
-        )
-
         return res.json(
             successResponse(
                 {
@@ -511,7 +428,6 @@ export const getStorageByItem = async (
                     storageItems,
                     totals: {
                         stock: totalStock,
-                        waste: totalWaste,
                     },
                 },
                 'Item storage details retrieved successfully',
@@ -551,7 +467,7 @@ export const getStorageBySPK = async (
 
         // Group by production stage
         const groupedByStage = storageItems.reduce((acc: any, item) => {
-            const stageName = item.productionStage
+            const stageName = item.spkStage
             if (!acc[stageName]) {
                 acc[stageName] = []
             }
@@ -584,7 +500,6 @@ export default {
     updateStorage,
     deleteStorage,
     transferStock,
-    markAsWaste,
     getStorageByItem,
     getStorageBySPK,
 }

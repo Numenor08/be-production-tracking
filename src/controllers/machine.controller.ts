@@ -13,7 +13,7 @@ export const getAllMachines = async (
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
-        const limit = Number(req.query.limit) || 10
+        const limit = Number(req.query.limit) || 30
         const search = req.query.search as string | undefined
         const sortBy = req.query.sortBy as string | undefined
         const sortOrder =
@@ -56,15 +56,6 @@ export const getAllMachines = async (
             take: limit,
             include: {
                 history: true,
-                preprocessOrders: {
-                    select: { id: true, code: true },
-                },
-                processOrders: {
-                    select: { id: true, code: true },
-                },
-                finishingOrders: {
-                    select: { id: true, code: true },
-                },
             },
         })
 
@@ -256,33 +247,22 @@ export const getMachineStats = async (
                 id: true,
                 code: true,
                 startStage: true,
-                preprocessStatus: true,
-                processStatus: true,
-                finishingStatus: true,
-                preprocessStartDate: true,
-                processStartDate: true,
-                finishingStartDate: true,
                 salesOrder: {
                     select: {
                         id: true,
                         code: true,
-                        customerName: true,
                     },
                 },
             },
         })
 
         // Calculate statistics
-        const completedJobs = history.filter((h) => h.status === 2).length
         const totalJobs = history.length
 
         const statsData = {
             machine: existing,
             stats: {
                 totalJobs,
-                completedJobs,
-                completionRate:
-                    totalJobs > 0 ? (completedJobs / totalJobs) * 100 : 0,
             },
             recentHistory: history.slice(0, 5),
             productionOrders,
@@ -310,24 +290,24 @@ export const getMachineHistory = async (
         const { id } = req.params
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 10
-        
+
         // Check if machine exists
         const machine = await prisma.machine.findUnique({
-            where: { id }
+            where: { id },
         })
-        
+
         if (!machine) {
             return res.status(404).json(errorResponse('Machine not found'))
         }
-        
+
         // Get total count for pagination
         const totalCount = await prisma.machineHistory.count({
-            where: { machineId: id }
+            where: { machineId: id },
         })
-        
+
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
-        
+
         // Fetch machine history with related data
         const history = await prisma.machineHistory.findMany({
             where: { machineId: id },
@@ -343,27 +323,28 @@ export const getMachineHistory = async (
                             select: {
                                 id: true,
                                 code: true,
-                                customerName: true
-                            }
-                        }
-                    }
-                }
-            }
+                            },
+                        },
+                    },
+                },
+            },
         })
-        
+
         return res.json(
             successResponse(history, 'Machine history retrieved successfully', {
                 pagination: {
                     page,
                     limit,
                     totalItems: totalCount,
-                    totalPages
-                }
-            })
+                    totalPages,
+                },
+            }),
         )
     } catch (error) {
         console.error('Error in getMachineHistory:', error)
-        return res.status(500).json(errorResponse('Failed to retrieve machine history'))
+        return res
+            .status(500)
+            .json(errorResponse('Failed to retrieve machine history'))
     }
 }
 
@@ -374,5 +355,5 @@ export default {
     updateMachine,
     deleteMachine,
     getMachineStats,
-    getMachineHistory
+    getMachineHistory,
 }

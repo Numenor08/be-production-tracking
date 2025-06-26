@@ -7,18 +7,14 @@ const isValidOrderStatus = (value: any): boolean => {
 }
 
 export const createSalesOrderValidation = [
-    body('customerName')
-        .notEmpty()
-        .withMessage('Customer name is required')
-        .trim(),
+    body('customerId').notEmpty().withMessage('Customer ID is required').trim(),
     body('completionDate')
         .notEmpty()
         .withMessage('Completion date is required')
         .isISO8601()
         .withMessage('Completion date must be a valid date'),
     body('deliveryDate')
-        .notEmpty()
-        .withMessage('Delivery date is required')
+        .optional()
         .isISO8601()
         .withMessage('Delivery date must be a valid date'),
     body('items').isArray().withMessage('Items must be an array'),
@@ -29,10 +25,10 @@ export const createSalesOrderValidation = [
 ]
 
 export const updateSalesOrderValidation = [
-    body('customerName')
+    body('customerId')
         .optional()
         .notEmpty()
-        .withMessage('Customer name cannot be empty')
+        .withMessage('Customer ID cannot be empty')
         .trim(),
     body('completionDate')
         .optional()
@@ -83,6 +79,10 @@ export const salesOrderPaginationValidation = [
         .optional()
         .custom(isValidOrderStatus)
         .withMessage('Status must be a valid order status'),
+    query('customerId')
+        .optional()
+        .isString()
+        .withMessage('Customer ID must be a string'),
 ]
 
 export const salesOrderIdValidation = [

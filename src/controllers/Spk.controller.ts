@@ -4,21 +4,22 @@ import {
     ProcessStage,
     PhaseStatus,
     OrderStatus,
-    ProductionItem,
+    ItemType,
 } from '../types/types'
 import { successResponse, errorResponse } from '../utils/api.utils'
-import { generateSPKCode } from '../libs/generate'
+import {
+    generateSPKCode,
+    generateItemCode,
+} from '../libs/generate'
 
 const prisma = new PrismaClient()
 
-/**
- * Get all production orders with pagination and filtering
- */
+// Get all SPK with pagination and filtering
 export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
     try {
         // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
-        const limit = Number(req.query.limit) || 25
+        const limit = Number(req.query.limit) || 30
         const search = req.query.search as string | undefined
         const sortBy = req.query.sortBy as string | undefined
         const sortOrder =
@@ -55,7 +56,7 @@ export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch production orders with pagination
+        // Fetch SPK with pagination (exclude spkItems and storageItems from include)
         const spks = await prisma.sPK.findMany({
             where,
             orderBy,
@@ -66,7 +67,17 @@ export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
                     select: {
                         id: true,
                         code: true,
-                        customerName: true,
+                    },
+                },
+                salesOrderItem: {
+                    include: {
+                        item: {
+                            select: {
+                                id: true,
+                                name: true,
+                                price: true,
+                            },
+                        },
                     },
                 },
                 preprocessMachine: {
@@ -88,31 +99,51 @@ export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
                     },
                 },
                 phases: {
-                    select: {
-                        id: true,
-                        stage: true,
-                        status: true,
-                    },
-                },
-                productionItems: {
                     include: {
-                        inputItem: true,
-                        outputItem: true,
-                    },
-                },
-                storageItems: {
-                    select: {
-                        id: true,
-                        stock: true,
-                        wasteStock: true,
-                        item: {
-                            select: {
-                                id: true,
-                                name: true,
+                        spkItems: {
+                            include: {
+                                outputItem: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        type: true,
+                                        price: true,
+                                    },
+                                },
+                                inputItems: {
+                                    include: {
+                                        inputItem: {
+                                            select: {
+                                                id: true,
+                                                name: true,
+                                                type: true,
+                                                price: true,
+                                            },
+                                        },
+                                    },
+                                },
                             },
                         },
                     },
                 },
+                // spkItems and storageItems are intentionally not included here
+            },
+        })
+
+        // For kalkulasi, fetch spkItems and storageItems separately for calculation only
+        const spkIds = spks.map((spk) => spk.id)
+        const allSpkItems = await prisma.sPK_Item.findMany({
+            where: { spkId: { in: spkIds } },
+            include: {
+                inputItems: true,
+            },
+        })
+        const allStorageItems = await prisma.storage.findMany({
+            where: { spkId: { in: spkIds } },
+            select: {
+                id: true,
+                stock: true,
+                spkId: true,
             },
         })
 
@@ -135,17 +166,17 @@ export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
             const progress = {
                 preprocess: calcPhaseProgress(
                     phasesByStage[ProcessStage.PREPROCESS].map((p) => ({
-                        status: p.status as PhaseStatus,
+                        status: p.status as unknown as PhaseStatus,
                     })),
                 ),
                 process: calcPhaseProgress(
                     phasesByStage[ProcessStage.PROCESS].map((p) => ({
-                        status: p.status as PhaseStatus,
+                        status: p.status as unknown as PhaseStatus,
                     })),
                 ),
                 finishing: calcPhaseProgress(
                     phasesByStage[ProcessStage.FINISHING].map((p) => ({
-                        status: p.status as PhaseStatus,
+                        status: p.status as unknown as PhaseStatus,
                     })),
                 ),
             }
@@ -155,20 +186,34 @@ export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
                     3,
             )
 
-            // Calculate item counts
+            // Kalkulasi item counts dari hasil query terpisah
+            const spkItems = allSpkItems.filter(
+                (item) => item.spkId === order.id,
+            )
             const inputItemCount =
-                order.productionItems?.reduce(
-                    (sum, item) => sum + item.inputQuantity,
-                    0,
-                ) || 0
+                spkItems.reduce((sum: number, item: any) => {
+                    const inputQuantity =
+                        item.inputItems?.reduce(
+                            (inputSum: number, inputItem: any) =>
+                                inputSum + (inputItem.inputQuantity || 0),
+                            0,
+                        ) || 0
+                    return sum + inputQuantity
+                }, 0) || 0
+
             const outputItemCount =
-                order.productionItems?.reduce(
-                    (sum, item) => sum + item.outputQuantity,
+                spkItems.reduce(
+                    (sum: number, item: any) =>
+                        sum + (item.outputQuantity || 0),
                     0,
                 ) || 0
+
+            const storageItems = allStorageItems.filter(
+                (item) => item.spkId === order.id,
+            )
             const storageItemCount =
-                order.storageItems?.reduce(
-                    (sum, item) => sum + item.stock,
+                storageItems.reduce(
+                    (sum: number, item: any) => sum + (item.stock || 0),
                     0,
                 ) || 0
 
@@ -189,30 +234,22 @@ export const getAllSPK = async (req: Request, res: Response): Promise<any> => {
         })
 
         return res.json(
-            successResponse(
-                enhancedOrders,
-                'Production orders retrieved successfully',
-                {
-                    pagination: {
-                        page,
-                        limit,
-                        totalItems: totalCount,
-                        totalPages,
-                    },
+            successResponse(enhancedOrders, 'SPK retrieved successfully', {
+                pagination: {
+                    page,
+                    limit,
+                    totalItems: totalCount,
+                    totalPages,
                 },
-            ),
+            }),
         )
     } catch (error) {
         console.error('Error in getAllSPK:', error)
-        return res
-            .status(500)
-            .json(errorResponse('Failed to retrieve production orders'))
+        return res.status(500).json(errorResponse('Failed to retrieve SPK'))
     }
 }
 
-/**
- * Get production order by ID with detailed information
- */
+// Get production order by ID with detailed information
 export const getSPKById = async (req: Request, res: Response): Promise<any> => {
     try {
         const { id } = req.params
@@ -220,33 +257,52 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
         const spk = await prisma.sPK.findUnique({
             where: { id },
             include: {
-                salesOrder: true,
-                preprocessMachine: true,
-                processMachine: true,
-                finishingMachine: true,
+                salesOrder: {
+                    select: {
+                        code: true,
+                        customer: {
+                            select: {
+                                name: true,
+                            },
+                        },
+                    },
+                },
                 phases: {
                     include: {
-                        item: true,
+                        spkItems: {
+                            include: {
+                                outputItem: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        type: true,
+                                        price: true,
+                                    },
+                                },
+                                inputItems: {
+                                    include: {
+                                        inputItem: {
+                                            select: {
+                                                id: true,
+                                                name: true,
+                                                type: true,
+                                                price: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
                     },
                 },
-                productionItems: {
-                    include: {
-                        inputItem: true,
-                        outputItem: true,
-                    },
+                preprocessMachine: {
+                    select: { id: true, name: true, type: true },
                 },
-                storageItems: {
-                    include: {
-                        item: true,
-                    },
+                processMachine: {
+                    select: { id: true, name: true, type: true },
                 },
-                machineHistory: {
-                    include: {
-                        machine: true,
-                    },
-                    orderBy: {
-                        createdAt: 'desc',
-                    },
+                finishingMachine: {
+                    select: { id: true, name: true, type: true },
                 },
                 report: {
                     include: {
@@ -256,11 +312,8 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
                             },
                         },
                     },
-                },
-                palletItems: {
-                    include: {
-                        pallet: true,
-                        storageItem: true,
+                    orderBy: {
+                        createdAt: 'desc',
                     },
                 },
             },
@@ -308,31 +361,38 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
             (progress.preprocess + progress.process + progress.finishing) / 3,
         )
 
+        // Get the most recent report for timeline completion data
+        const latestReport =
+            spk.report && spk.report.length > 0 ? spk.report[0] : null
+
+        // Get start dates from phases
+        const preprocessPhase = phases.find(
+            (p) => p.stage === ProcessStage.PREPROCESS,
+        )
+        const processPhase = phases.find(
+            (p) => p.stage === ProcessStage.PROCESS,
+        )
+        const finishingPhase = phases.find(
+            (p) => p.stage === ProcessStage.FINISHING,
+        )
+
         // Prepare timeline data
         const timeline = [
             { stage: 'Created', date: spk.createdAt, completed: true },
             {
                 stage: 'Preprocess Started',
-                date: spk.preprocessStartDate,
-                completed: !!spk.preprocessStartDate,
+                date: preprocessPhase?.startDate || null,
+                completed: !!preprocessPhase?.startDate,
             },
             {
                 stage: 'Process Started',
-                date: spk.processStartDate,
-                completed: !!spk.processStartDate,
+                date: processPhase?.startDate || null,
+                completed: !!processPhase?.startDate,
             },
             {
                 stage: 'Finishing Started',
-                date: spk.finishingStartDate,
-                completed: !!spk.finishingStartDate,
-            },
-            {
-                stage: 'Completed',
-                date: spk.report?.finishingCompletionDate || null,
-                completed:
-                    spk.preprocessStatus === PhaseStatus.COMPLETED &&
-                    spk.processStatus === PhaseStatus.COMPLETED &&
-                    spk.finishingStatus === PhaseStatus.COMPLETED,
+                date: finishingPhase?.startDate || null,
+                completed: !!finishingPhase?.startDate,
             },
         ]
 
@@ -361,20 +421,19 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
     }
 }
 
-/**
- * Create a new production order
- */
+// Create a new production order with updated structure
 export const createSPK = async (req: Request, res: Response): Promise<any> => {
     try {
         const {
             salesOrderId,
+            salesOrderItemId,
             preprocessMachineId,
             processMachineId,
             finishingMachineId,
             preprocessDeadline,
             processDeadline,
             finishingDeadline,
-            productionItemsData = [],
+            targetQuantity,
         } = req.body
 
         // Check if salesOrder exists
@@ -393,7 +452,28 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
             return res.status(404).json(errorResponse('Sales order not found'))
         }
 
-        // Check if machines exist
+        // Validate if salesOrderItemId is valid
+        const salesOrderItem = salesOrder.items.find(
+            (item) => item.id === salesOrderItemId,
+        )
+        if (!salesOrderItem) {
+            return res
+                .status(404)
+                .json(errorResponse('Sales order item not found'))
+        }
+
+        // Check if quantity is available
+        if (targetQuantity > salesOrderItem.remainingQuantity) {
+            return res
+                .status(400)
+                .json(
+                    errorResponse(
+                        `Requested quantity ${targetQuantity} exceeds remaining quantity ${salesOrderItem.remainingQuantity} for item ${salesOrderItem.item ? salesOrderItem.item.name : `${salesOrderItem.itemId} (Item name not found)`}`,
+                    ),
+                )
+        }
+
+        // Check if machines exist and are of correct type
         if (preprocessMachineId) {
             const preprocessMachine = await prisma.machine.findUnique({
                 where: { id: preprocessMachineId },
@@ -454,44 +534,31 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
             }
         }
 
-        // Validate all items exist
-        if (productionItemsData.length > 0) {
-            const inputItemIds = productionItemsData.map(
-                (item: ProductionItem) => item.inputItemId,
-            )
-            // Only include outputItemId if it exists (not undefined/null)
-            const outputItemIds = productionItemsData
-                .filter((item: ProductionItem) => !!item.outputItemId)
-                .map((item: ProductionItem) => item.outputItemId as string)
-
-            const allItemIds = [...new Set([...inputItemIds, ...outputItemIds])]
-
-            if (allItemIds.length > 0) {
-                const foundItems = await prisma.item.findMany({
-                    where: { id: { in: allItemIds } },
-                })
-
-                if (foundItems.length !== allItemIds.length) {
-                    return res
-                        .status(400)
-                        .json(errorResponse('One or more items not found'))
-                }
-            }
-        }
-
         // Generate unique SPK code
         const code = await generateSPKCode()
+
+        // Determine starting stage based on machine assignments
+        let startStage = ProcessStage.PREPROCESS
+        if (!preprocessMachineId && processMachineId) {
+            startStage = ProcessStage.PROCESS
+        } else if (
+            !preprocessMachineId &&
+            !processMachineId &&
+            finishingMachineId
+        ) {
+            startStage = ProcessStage.FINISHING
+        }
 
         // Start a transaction to create the SPK and related records
         const result = await prisma.$transaction(async (tx) => {
             // Create the SPK
             const newSPK = await tx.sPK.create({
                 data: {
+                    salesOrder: { connect: { id: salesOrderId } },
+                    salesOrderItem: { connect: { id: salesOrderItemId } },
                     code,
-                    startStage: ProcessStage.PREPROCESS,
-                    preprocessStatus: PhaseStatus.NOT_STARTED,
-                    processStatus: PhaseStatus.NOT_STARTED,
-                    finishingStatus: PhaseStatus.NOT_STARTED,
+                    startStage,
+                    targetQuantity,
                     preprocessDeadline: preprocessDeadline
                         ? new Date(preprocessDeadline)
                         : null,
@@ -501,7 +568,6 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                     finishingDeadline: finishingDeadline
                         ? new Date(finishingDeadline)
                         : null,
-                    salesOrder: { connect: { id: salesOrderId } },
                     preprocessMachine: preprocessMachineId
                         ? { connect: { id: preprocessMachineId } }
                         : undefined,
@@ -514,166 +580,51 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                 },
             })
 
-            // Create pr// First, track any created output IDs
-            const createdOutputIds = new Map()
-
-            // Create production items and track created output items
-            if (productionItemsData.length > 0) {
-                // First, fetch the sales order with its items for reference
-                const salesOrderWithItems = await tx.salesOrder.findUnique({
-                    where: { id: salesOrderId },
-                    include: {
-                        items: {
-                            include: {
-                                item: true,
-                            },
-                        },
+            // Update sales order item's remaining quantity
+            await tx.salesOrderItem.update({
+                where: { id: salesOrderItemId },
+                data: {
+                    remainingQuantity: { decrement: targetQuantity },
+                    fullyPlanned: {
+                        set:
+                            salesOrderItem.remainingQuantity === targetQuantity,
                     },
-                })
-
-                for (const item of productionItemsData) {
-                    let outputId = item.outputItemId
-
-                    // If no output item ID is provided, create a new semi-finished item
-                    if (!outputId && item.type === 'SEMI_FINISHED') {
-                        const inputItem = await tx.item.findUnique({
-                            where: { id: item.inputItemId },
-                        })
-
-                        // Try to find the corresponding product from the sales order items
-                        let productName = `Unknown Product (${new Date().toISOString().split('T')[0]})`
-                        if (salesOrderWithItems?.items) {
-                            // Find a matching sales order item - this is a simplified match
-                            // You might need more complex logic depending on how items are related
-                            const matchingSalesItem =
-                                salesOrderWithItems.items.find(
-                                    (soi) =>
-                                        // Match based on whatever criteria makes sense for your application
-                                        // For example, this might be item type, name pattern, etc.
-                                        soi.item?.type === 'PRODUCT' ||
-                                        (inputItem &&
-                                            soi.item?.name.includes(
-                                                inputItem.name,
-                                            )),
-                                )
-
-                            if (matchingSalesItem) {
-                                productName = matchingSalesItem.item?.name ?? 'Unknown Product'
-                            }
-                        }
-
-                        const newOutputItem = await tx.item.create({
-                            data: {
-                                name: `${productName} - Semi Finished'}`,
-                                type: 'SEMI_FINISHED',
-                            },
-                        })
-
-                        outputId = newOutputItem.id
-                        // Store the created output ID for this input item
-                        createdOutputIds.set(item.inputItemId, outputId)
-                    }
-
-                    await tx.productionItem.create({
-                        data: {
-                            spk: { connect: { id: newSPK.id } },
-                            inputItem: {
-                                connect: { id: item.inputItemId },
-                            },
-                            outputItem: {
-                                connect: { id: outputId },
-                            },
-                            type: item.type,
-                            inputQuantity: item.inputQuantity || 0,
-                            outputQuantity: item.outputQuantity || 0,
-                        },
-                    })
-                }
-            }
-
-            // Find a valid item ID to use for phases
-            const firstItem = productionItemsData[0]
-            let phaseItemId
-
-            // First check if we have a direct output item ID
-            if (firstItem?.outputItemId) {
-                phaseItemId = firstItem.outputItemId
-                // If not, check if we created one
-            } else if (
-                firstItem &&
-                createdOutputIds.has(firstItem.inputItemId)
-            ) {
-                phaseItemId = createdOutputIds.get(firstItem.inputItemId)
-                // As a last resort, use the input item ID
-            } else if (firstItem) {
-                phaseItemId = firstItem.inputItemId
-                // If we have no items at all, find any suitable item
-            } else {
-                const anyItem = await tx.item.findFirst({
-                    where: { type: 'SEMI_FINISHED' },
-                })
-
-                if (!anyItem) {
-                    // Create a default item if needed
-                    const defaultItem = await tx.item.create({
-                        data: {
-                            name: 'Default Production Item',
-                            type: 'SEMI_FINISHED',
-                        },
-                    })
-                    phaseItemId = defaultItem.id
-                } else {
-                    phaseItemId = anyItem.id
-                }
-            }
-
-            // Create phases for the SPK
-            await tx.sPK_Phase.createMany({
-                data: [
-                    {
-                        spkId: newSPK.id,
-                        stage: ProcessStage.PREPROCESS,
-                        targetQuantity: calculateTotalQuantity(
-                            productionItemsData,
-                            'outputQuantity',
-                        ),
-                        plannedWaste: 0,
-                        actualQuantity: 0,
-                        actualWaste: 0,
-                        storageUsed: 0,
-                        itemId: phaseItemId,
-                        status: PhaseStatus.NOT_STARTED,
-                    },
-                    {
-                        spkId: newSPK.id,
-                        stage: ProcessStage.PROCESS,
-                        targetQuantity: calculateTotalQuantity(
-                            productionItemsData,
-                            'outputQuantity',
-                        ),
-                        plannedWaste: 0,
-                        actualQuantity: 0,
-                        actualWaste: 0,
-                        storageUsed: 0,
-                        itemId: phaseItemId,
-                        status: PhaseStatus.NOT_STARTED,
-                    },
-                    {
-                        spkId: newSPK.id,
-                        stage: ProcessStage.FINISHING,
-                        targetQuantity: calculateTotalQuantity(
-                            productionItemsData,
-                            'outputQuantity',
-                        ),
-                        plannedWaste: 0,
-                        actualQuantity: 0,
-                        actualWaste: 0,
-                        storageUsed: 0,
-                        itemId: phaseItemId,
-                        status: PhaseStatus.NOT_STARTED,
-                    },
-                ],
+                },
             })
+
+            // Create phases only for machines that are assigned
+            const phasesToCreate = []
+
+            if (preprocessMachineId) {
+                phasesToCreate.push({
+                    spkId: newSPK.id,
+                    stage: ProcessStage.PREPROCESS,
+                    status: PhaseStatus.NOT_STARTED,
+                })
+            }
+
+            if (processMachineId) {
+                phasesToCreate.push({
+                    spkId: newSPK.id,
+                    stage: ProcessStage.PROCESS,
+                    status: PhaseStatus.NOT_STARTED,
+                })
+            }
+
+            if (finishingMachineId) {
+                phasesToCreate.push({
+                    spkId: newSPK.id,
+                    stage: ProcessStage.FINISHING,
+                    status: PhaseStatus.NOT_STARTED,
+                })
+            }
+
+            // Create phases first
+            if (phasesToCreate.length > 0) {
+                await tx.sPK_Phase.createMany({
+                    data: phasesToCreate,
+                })
+            }
 
             // Update sales order status
             await tx.salesOrder.update({
@@ -687,7 +638,6 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                     data: {
                         machine: { connect: { id: preprocessMachineId } },
                         spk: { connect: { id: newSPK.id } },
-                        status: 0, // Initial status
                         details: `Assigned to SPK ${code} for preprocess stage`,
                     },
                 })
@@ -698,7 +648,6 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                     data: {
                         machine: { connect: { id: processMachineId } },
                         spk: { connect: { id: newSPK.id } },
-                        status: 0, // Initial status
                         details: `Assigned to SPK ${code} for process stage`,
                     },
                 })
@@ -709,7 +658,6 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                     data: {
                         machine: { connect: { id: finishingMachineId } },
                         spk: { connect: { id: newSPK.id } },
-                        status: 0, // Initial status
                         details: `Assigned to SPK ${code} for finishing stage`,
                     },
                 })
@@ -726,17 +674,50 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                     select: {
                         id: true,
                         code: true,
-                        customerName: true,
+                        customer: {
+                            select: {
+                                name: true,
+                            },
+                        },
                     },
                 },
-                preprocessMachine: true,
-                processMachine: true,
-                finishingMachine: true,
-                phases: true,
-                productionItems: {
+                preprocessMachine: {
+                    select: { id: true, name: true, type: true },
+                },
+                processMachine: {
+                    select: { id: true, name: true, type: true },
+                },
+                finishingMachine: {
+                    select: { id: true, name: true, type: true },
+                },
+                phases: {
                     include: {
-                        inputItem: true,
-                        outputItem: true,
+                        spkItems: {
+                            include: {
+                                outputItem: {
+                                    select: {
+                                        id: true,
+                                        code: true,
+                                        name: true,
+                                        type: true,
+                                        price: true,
+                                    },
+                                },
+                                inputItems: {
+                                    include: {
+                                        inputItem: {
+                                            select: {
+                                                id: true,
+                                                code: true,
+                                                name: true,
+                                                type: true,
+                                                price: true,
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
                     },
                 },
             },
@@ -758,9 +739,7 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
     }
 }
 
-/**
- * Update an existing production order
- */
+// Update an existing production order
 export const updateSPK = async (req: Request, res: Response): Promise<any> => {
     try {
         const { id } = req.params
@@ -889,7 +868,6 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
                     data: {
                         machine: { connect: { id: mesin_preprocess } },
                         spk: { connect: { id } },
-                        status: 0,
                         details: `Assigned to SPK ${existingSPK.code} for preprocess stage`,
                     },
                 })
@@ -906,7 +884,6 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
                     data: {
                         machine: { connect: { id: mesin_process } },
                         spk: { connect: { id } },
-                        status: 0,
                         details: `Assigned to SPK ${existingSPK.code} for process stage`,
                     },
                 })
@@ -925,7 +902,6 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
                     data: {
                         machine: { connect: { id: mesin_finishing } },
                         spk: { connect: { id } },
-                        status: 0,
                         details: `Assigned to SPK ${existingSPK.code} for finishing stage`,
                     },
                 })
@@ -947,7 +923,7 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
                     select: {
                         id: true,
                         code: true,
-                        customerName: true,
+                        // customerName: true,
                     },
                 },
                 preprocessMachine: true,
@@ -971,20 +947,25 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
     }
 }
 
-/**
- * Delete a production order
- */
+// Update the deleteSPK function to handle SalesOrder status
 export const deleteSPK = async (req: Request, res: Response): Promise<any> => {
     try {
         const { id } = req.params
 
-        // Check if SPK exists
+        // Check if SPK exists with detailed information including target items
         const existingSPK = await prisma.sPK.findUnique({
             where: { id },
             include: {
+                salesOrder: true,
+                salesOrderItem: true,
                 phases: true,
                 storageItems: true,
-                palletItems: true,
+                report: true,
+                spkItems: {
+                    include: {
+                        outputItem: true,
+                    },
+                },
             },
         })
 
@@ -1008,45 +989,51 @@ export const deleteSPK = async (req: Request, res: Response): Promise<any> => {
             )
         }
 
-        if (existingSPK.palletItems && existingSPK.palletItems.length > 0) {
-            return res.status(400).json(
-                errorResponse(
-                    'Cannot delete production order with existing pallet items',
-                    {
-                        palletItems: existingSPK.palletItems.map((item) => ({
-                            id: item.id,
-                        })),
-                    },
-                ),
-            )
-        }
+        // Get the salesOrderId to check for other SPKs later
+        const salesOrderId = existingSPK.salesOrder.id
 
         // Start transaction for delete
         await prisma.$transaction(async (tx) => {
-            // Delete related phases
-            await tx.sPK_Phase.deleteMany({
-                where: { spkId: id },
-            })
-
-            // Delete related machine history
-            await tx.machineHistory.deleteMany({
-                where: { spkId: id },
-            })
-
-            // Delete related production items
-            await tx.productionItem.deleteMany({
-                where: { spkId: id },
-            })
-
-            // Delete the SPK report if it exists
-            await tx.report.deleteMany({
-                where: { spkId: id },
+            // Update sales order items remaining quantities using targetItems
+            await tx.salesOrderItem.update({
+                where: {
+                    id: existingSPK.salesOrderItemId,
+                },
+                data: {
+                    remainingQuantity: {
+                        increment: existingSPK.targetQuantity,
+                    },
+                    fullyPlanned: false,
+                },
             })
 
             // Delete the SPK itself
             await tx.sPK.delete({
                 where: { id },
             })
+
+            // Check if there are any remaining SPKs for this sales order
+            const remainingSPKs = await tx.sPK.count({
+                where: { salesOrderId: salesOrderId },
+            })
+
+            // If no SPKs remain and the sales order isn't completed, set status back to IDLE
+            if (remainingSPKs === 0) {
+                const salesOrder = await tx.salesOrder.findUnique({
+                    where: { id: salesOrderId },
+                    select: { status: true },
+                })
+
+                if (
+                    salesOrder &&
+                    salesOrder.status === OrderStatus.IN_PROGRESS
+                ) {
+                    await tx.salesOrder.update({
+                        where: { id: salesOrderId },
+                        data: { status: OrderStatus.IDLE },
+                    })
+                }
+            }
         })
 
         return res.json(
@@ -1060,27 +1047,363 @@ export const deleteSPK = async (req: Request, res: Response): Promise<any> => {
     }
 }
 
-export const updatePhaseProgress = async (
+export const getSPKPhaseByStage = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
         const { id } = req.params
-        const { stage, actualQuantity, actualWaste, status } = req.body
+        const { stage } = req.query
 
-        // Validate stage value
-        if (!Object.values(ProcessStage).includes(stage)) {
-            return res
-                .status(400)
-                .json(errorResponse('Invalid production stage'))
+        // Get the SPK phase by ID
+        const spkPhase = await prisma.sPK_Phase.findFirst({
+            where: {
+                spkId: id,
+                stage: stage as ProcessStage,
+            },
+            include: {
+                spkItems: {
+                    include: {
+                        outputItem: {
+                            select: {
+                                id: true,
+                                name: true,
+                                type: true,
+                                price: true,
+                            },
+                        },
+                        inputItems: {
+                            include: {
+                                inputItem: {
+                                    select: {
+                                        id: true,
+                                        name: true,
+                                        type: true,
+                                        price: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+            },
+        })
+
+        if (!spkPhase) {
+            return res.status(404).json(errorResponse('SPK phase not found'))
         }
 
-        // Check if SPK exists with the phase
+        return res.json(successResponse(spkPhase))
+    } catch (error) {
+        console.error('Error in getSPKPhaseById:', error)
+        return res.status(500).json(errorResponse('Failed to get SPK phase'))
+    }
+}
+
+// Start a specific SPK phase
+export const startSPKPhase = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
+    try {
+        const { id } = req.params
+        const { stage } = req.body
+
+        // Get the SPK with its phases to access item information
         const spk = await prisma.sPK.findUnique({
             where: { id },
             include: {
                 phases: {
-                    where: { stage },
+                    where: { stage: stage },
+                    include: {
+                        spkItems: true,
+                    },
+                },
+            },
+        })
+
+        if (!spk) {
+            return res.status(404).json(errorResponse('SPK not found'))
+        }
+
+        // Check if the phase already exists for this stage
+        const existingPhase = spk.phases[0]
+        if (!existingPhase) {
+            return res
+                .status(404)
+                .json(errorResponse('Phase not found for this stage'))
+        }
+
+        // Check if the phase is already ongoing or completed
+        if (
+            existingPhase.status === PhaseStatus.ONGOING ||
+            existingPhase.status === PhaseStatus.COMPLETED
+        ) {
+            return res
+                .status(400)
+                .json(errorResponse('Phase is already ongoing or completed'))
+        }
+
+        // Validate that the phase does have spkItems
+        if (existingPhase.spkItems.length === 0) {
+            return res
+                .status(400)
+                .json(
+                    errorResponse(
+                        'Phase cannot be started while it has no SPK items',
+                    ),
+                )
+        }
+
+        // Update phase to start it
+        const updatedPhase = await prisma.sPK_Phase.update({
+            where: { id: existingPhase.id },
+            data: {
+                status: PhaseStatus.ONGOING,
+                startDate: new Date(),
+            },
+        })
+
+        return res.json(
+            successResponse(updatedPhase, 'Phase started successfully'),
+        )
+    } catch (error: any) {
+        console.error(error)
+        return res.status(500).json(
+            errorResponse('Failed to start SPK phase', {
+                error: error.message,
+            }),
+        )
+    }
+}
+
+// Complete progress of SPK phase
+export const completeSPKPhase = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
+    try {
+        const { id } = req.params // SPK id
+        const { stage, spkItemsResult, notes, date } = req.body
+
+        // Get the SPK with its phases to access item information
+        const spk = await prisma.sPK.findUnique({
+            where: { id },
+            include: {
+                phases: {
+                    include: {
+                        spkItems: {
+                            include: {
+                                outputItem: true,
+                                inputItems: {
+                                    include: {
+                                        inputItem: true,
+                                    },
+                                },
+                            },
+                        },
+                    },
+                },
+                report: {
+                    orderBy: {
+                        createdAt: 'desc',
+                    },
+                    take: 1,
+                },
+            },
+        })
+
+        if (!spk) {
+            return res.status(404).json(errorResponse('SPK not found'))
+        }
+
+        // Get the current status of the phase for this stage
+        const currentPhase = spk.phases.find((p) => p.stage === stage)
+        const currentStatus = currentPhase ? currentPhase.status : undefined
+
+        // Check for valid status transition
+        if (currentStatus !== PhaseStatus.ONGOING) {
+            return res
+                .status(400)
+                .json(errorResponse('Invalid status transition'))
+        }
+
+        // Get the phase information
+        const phase = spk.phases.find((p) => p.stage === stage)
+        if (!phase) {
+            return res
+                .status(404)
+                .json(errorResponse('Phase not found for this SPK'))
+        }
+
+        // Update the SPK phase status and handle items
+        const updatedData = await prisma.$transaction(async (prisma) => {
+            // Update the phase status
+            const updatedPhase = await prisma.sPK_Phase.update({
+                where: {
+                    spkId_stage: {
+                        spkId: id,
+                        stage: stage,
+                    },
+                },
+                data: {
+                    completionDate: date ? new Date(date) : new Date(),
+                    status: PhaseStatus.COMPLETED,
+                },
+            })
+
+            // Process each SPK item result
+            const {
+                spkItemId,
+                actualQuantity,
+                actualWaste,
+                storageUsed = 0,
+                storageId = null,
+            } = spkItemsResult
+
+            // Find the original SPK item
+            const spkItem = phase.spkItems.find((item) => item.id === spkItemId)
+            if (!spkItem) {
+                throw new Error(`SPK item with ID ${spkItemId} not found`)
+            }
+
+            // If storage is being used, verify and update storage
+            if (storageUsed > 0 && storageId) {
+                // Check if we have enough stock in the storage
+                const storage = await prisma.storage.findUnique({
+                    where: { id: storageId },
+                })
+
+                if (!storage) {
+                    throw new Error(`Storage with ID ${storageId} not found`)
+                }
+
+                if (storage.stock < storageUsed) {
+                    throw new Error(
+                        `Not enough stock in storage. Available: ${storage.stock}, Requested: ${storageUsed}`,
+                    )
+                }
+
+                // Update storage to reduce stock
+                await prisma.storage.update({
+                    where: { id: storageId },
+                    data: { stock: { decrement: storageUsed } },
+                })
+            }
+
+            // Update the SPK item with actual quantities
+            await prisma.sPK_Item.update({
+                where: { id: spkItemId },
+                data: {
+                    outputQuantity: actualQuantity || 0,
+                    wasteQuantity: actualWaste || 0,
+                },
+            })
+
+            // Create a new storage entry if we have actual quantity
+            if (actualQuantity > 0 && spkItem.outputItemId) {
+                // Check if storage already exists for this item, stage and SPK
+                const existingStorage = await prisma.storage.findFirst({
+                    where: {
+                        spkId: id,
+                        itemId: spkItem.outputItemId,
+                        spkStage: stage,
+                    },
+                })
+
+                if (existingStorage) {
+                    await prisma.storage.update({
+                        where: { id: existingStorage.id },
+                        data: {
+                            stock: {
+                                increment: actualQuantity,
+                            },
+                        },
+                    })
+                } else {
+                    await prisma.storage.create({
+                        data: {
+                            spkId: id,
+                            itemId: spkItem.outputItemId,
+                            spkStage: stage,
+                            stock: actualQuantity,
+                        },
+                    })
+                }
+            }
+
+            // If this is the last Phase will update the sales order item and sales order
+            if (spk.phases.every((p) => p.status === PhaseStatus.COMPLETED)) {
+                // Update sales order item to mark it as completed
+                await prisma.salesOrderItem.update({
+                    where: { id: spk.salesOrderItemId },
+                    data: {
+                        remainingQuantity: 0,
+                        fullyPlanned: true,
+                    },
+                })
+
+                // Update sales order status to COMPLETED
+                await prisma.salesOrder.update({
+                    where: { id: spk.salesOrderId },
+                    data: { status: OrderStatus.COMPLETED },
+                })
+            }
+            
+
+            // Update the SPK status based on the stage
+            const updateSPKData: any = {}
+            switch (stage) {
+                case ProcessStage.PREPROCESS:
+                    updateSPKData.preprocessStatus = PhaseStatus.COMPLETED
+                    break
+                case ProcessStage.PROCESS:
+                    updateSPKData.processStatus = PhaseStatus.COMPLETED
+                    break
+                case ProcessStage.FINISHING:
+                    updateSPKData.finishingStatus = PhaseStatus.COMPLETED
+                    break
+            }
+
+            await prisma.sPK.update({
+                where: { id },
+                data: updateSPKData,
+            })
+
+            return {
+                // report: newReport,
+                updatedPhase,
+                spkItems: spkItemsResult,
+            }
+        })
+
+        return res.json(
+            successResponse(updatedData, 'Phase progress updated successfully'),
+        )
+    } catch (error: any) {
+        console.error(error)
+        return res.status(500).json(
+            errorResponse('Failed to update phase progress', {
+                error: error.message,
+            }),
+        )
+    }
+}
+
+// Delete an SPK phase (if not completed)
+export const deleteSPKPhase = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
+    try {
+        const { id, phaseId } = req.params
+
+        // Check if SPK exists
+        const spk = await prisma.sPK.findUnique({
+            where: { id },
+            include: {
+                phases: {
+                    where: { id: phaseId },
                 },
             },
         })
@@ -1090,92 +1413,300 @@ export const updatePhaseProgress = async (
         }
 
         if (spk.phases.length === 0) {
-            return res
-                .status(404)
-                .json(errorResponse(`No ${stage} phase found for this SPK`))
+            return res.status(404).json(errorResponse('SPK phase not found'))
         }
 
         const phase = spk.phases[0]
 
-        // Update SPK phase with actual progress
-        const result = await prisma.$transaction(async (tx) => {
-            // Update the phase
-            const updatedPhase = await tx.sPK_Phase.update({
-                where: { id: phase.id },
-                data: {
-                    actualQuantity:
-                        actualQuantity !== undefined
-                            ? actualQuantity
-                            : phase.actualQuantity,
-                    actualWaste:
-                        actualWaste !== undefined
-                            ? actualWaste
-                            : phase.actualWaste,
-                    status: status ? (status as PhaseStatus) : phase.status,
-                },
+        // Prevent deleting completed phases
+        if (phase.status === PhaseStatus.COMPLETED) {
+            return res
+                .status(400)
+                .json(errorResponse('Cannot delete a completed phase'))
+        }
+
+        // Update the SPK status
+        const updateData: any = {}
+
+        switch (phase.stage) {
+            case ProcessStage.PREPROCESS:
+                updateData.preprocessStatus = PhaseStatus.SKIPPED
+                updateData.preprocessMachineId = null
+                break
+            case ProcessStage.PROCESS:
+                updateData.processStatus = PhaseStatus.SKIPPED
+                updateData.processMachineId = null
+                break
+            case ProcessStage.FINISHING:
+                updateData.finishingStatus = PhaseStatus.SKIPPED
+                updateData.finishingMachineId = null
+                break
+        }
+
+        // Start transaction to delete phase and update SPK
+        await prisma.$transaction(async (tx) => {
+            // Delete the phase
+            await tx.sPK_Phase.delete({
+                where: { id: phaseId },
             })
 
-            // Update SPK status if needed
-            if (status) {
-                const spkUpdateData: any = {}
+            // Update the SPK status
+            await tx.sPK.update({
+                where: { id },
+                data: updateData,
+            })
 
-                switch (stage) {
-                    case ProcessStage.PREPROCESS:
-                        spkUpdateData.preprocessStatus = status
-                        if (
-                            status === PhaseStatus.ONGOING &&
-                            !spk.preprocessStartDate
-                        ) {
-                            spkUpdateData.preprocessStartDate = new Date()
-                        }
-                        break
-                    case ProcessStage.PROCESS:
-                        spkUpdateData.processStatus = status
-                        if (
-                            status === PhaseStatus.ONGOING &&
-                            !spk.processStartDate
-                        ) {
-                            spkUpdateData.processStartDate = new Date()
-                        }
-                        break
-                    case ProcessStage.FINISHING:
-                        spkUpdateData.finishingStatus = status
-                        if (
-                            status === PhaseStatus.ONGOING &&
-                            !spk.finishingStartDate
-                        ) {
-                            spkUpdateData.finishingStartDate = new Date()
-                        }
-                        break
-                }
-
-                await tx.sPK.update({
-                    where: { id },
-                    data: spkUpdateData,
+            // Delete related machine history if any
+            if (
+                phase.stage === ProcessStage.PREPROCESS &&
+                spk.preprocessMachineId
+            ) {
+                await tx.machineHistory.deleteMany({
+                    where: {
+                        machineId: spk.preprocessMachineId,
+                        spkId: spk.id,
+                    },
+                })
+            } else if (
+                phase.stage === ProcessStage.PROCESS &&
+                spk.processMachineId
+            ) {
+                await tx.machineHistory.deleteMany({
+                    where: {
+                        machineId: spk.processMachineId,
+                        spkId: spk.id,
+                    },
+                })
+            } else if (
+                phase.stage === ProcessStage.FINISHING &&
+                spk.finishingMachineId
+            ) {
+                await tx.machineHistory.deleteMany({
+                    where: {
+                        machineId: spk.finishingMachineId,
+                        spkId: spk.id,
+                    },
                 })
             }
-
-            // Return the updated phase
-            return updatedPhase
         })
 
-        return res.json(
-            successResponse(
-                result,
-                `SPK phase ${stage} progress updated successfully`,
-            ),
-        )
+        return res.json(successResponse(null, 'SPK phase deleted successfully'))
     } catch (error) {
-        console.error('Error in updatePhaseProgress:', error)
-        return res
-            .status(500)
-            .json(errorResponse('Failed to update phase progress'))
+        console.error('Error in deleteSPKPhase:', error)
+        return res.status(500).json(errorResponse('Failed to delete SPK phase'))
     }
 }
 
-/**
- * Helper function to calculate phase progress percentage
- */
+export const createSPKItem = async (
+    req: Request,
+    res: Response,
+): Promise<any> => {
+    try {
+        const { id } = req.params // SPK id
+        const {
+            phaseId,
+            outputItemId,
+            type,
+            stage,
+            targetOutputQuantity,
+            targetWasteQuantity = 0,
+            inputItems = [],
+        } = req.body
+
+        // Check if SPK exists
+        const spk = await prisma.sPK.findUnique({
+            where: { id },
+            include: {
+                phases: {
+                    where: stage ? { stage } : {},
+                },
+                salesOrderItem: {
+                    include: {
+                        item: { select: { id: true, name: true, code: true } },
+                    },
+                },
+            },
+        })
+
+        if (!spk) {
+            return res.status(404).json(errorResponse('SPK not found'))
+        }
+
+        // If phase ID is not provided but stage is, find the phase by stage
+        let usedPhaseId = phaseId
+        if (!phaseId && stage) {
+            // Check if phase already exists for this stage
+            const existingPhase = spk.phases.find((p) => p.stage === stage)
+
+            if (existingPhase) {
+                usedPhaseId = existingPhase.id
+            } else {
+                // Phase doesn't exist for this stage
+                return res
+                    .status(404)
+                    .json(
+                        errorResponse(
+                            `No phase found for ${stage} stage. Create the phase first.`,
+                        ),
+                    )
+            }
+        } else if (!phaseId) {
+            return res
+                .status(400)
+                .json(errorResponse('Either phaseId or stage must be provided'))
+        }
+
+        // Check if the provided phase belongs to this SPK
+        if (phaseId && !spk.phases.some((p) => p.id === phaseId)) {
+            return res
+                .status(404)
+                .json(
+                    errorResponse(
+                        `Provided phase not found in this SPK ${stage || 'stage'}`,
+                    ),
+                )
+        }
+
+        // Check if the type is valid
+        if (type === ItemType.MATERIAL) {
+            return res.status(400).json(errorResponse('Invalid item type'))
+        }
+
+        if (type === ItemType.PRODUCT && stage === ProcessStage.PREPROCESS) {
+            return res
+                .status(400)
+                .json(
+                    errorResponse(
+                        'Cannot create PRODUCT type item in PREPROCESS stage',
+                    ),
+                )
+        }
+
+        // Create a new output item for semi-finished products if needed
+        let finalOutputItemId: string | undefined
+
+        if (!outputItemId) {
+            // Create a new semi-finished output item
+            const itemName = `${spk.salesOrderItem.item?.name || spk.code} - ${stage || 'ITEM'} - ${type}`
+
+            const code = await generateItemCode(type as ItemType)
+
+            const newItem = await prisma.item.create({
+                data: {
+                    name: itemName,
+                    type: type as ItemType,
+                    code,
+                },
+            })
+            finalOutputItemId = newItem.id
+        } else {
+            // Verify that the output item exists
+            const outputItem = await prisma.item.findUnique({
+                where: { id: outputItemId },
+            })
+            finalOutputItemId = outputItemId
+
+            if (!outputItem) {
+                return res
+                    .status(404)
+                    .json(errorResponse('Output item not found'))
+            }
+        }
+
+        // Validate all input items exist
+        if (inputItems.length > 0) {
+            const inputItemIds = inputItems.map((item: any) => item.inputItemId)
+
+            const foundItems = await prisma.item.findMany({
+                where: { id: { in: inputItemIds } },
+            })
+
+            if (foundItems.length !== inputItemIds.length) {
+                return res
+                    .status(400)
+                    .json(errorResponse('One or more input items not found'))
+            }
+
+            if (foundItems.some((item) => item.type === ItemType.PRODUCT)) {
+                return res
+                    .status(400)
+                    .json(
+                        errorResponse('Input items cannot be of type PRODUCT'),
+                    )
+            }
+        }
+
+        // Create the SPK item with a transaction
+        const result = await prisma.$transaction(async (tx) => {
+            // Create the SPK_Item
+            const spkItem = await tx.sPK_Item.create({
+                data: {
+                    spkId: id,
+                    phaseId: usedPhaseId,
+                    type: type as ItemType,
+                    targetOutputQuantity: targetOutputQuantity || 0,
+                    targetWaste: targetWasteQuantity || 0,
+                    outputQuantity: 0,
+                    wasteQuantity: 0,
+                    outputItemId: finalOutputItemId,
+                },
+            })
+
+            // Create input items relationship
+            if (inputItems.length > 0) {
+                for (const inputItem of inputItems) {
+                    await tx.sPK_InputItem.create({
+                        data: {
+                            spkItemId: spkItem.id,
+                            inputItemId: inputItem.inputItemId,
+                            inputQuantity: inputItem.inputQuantity || 0,
+                        },
+                    })
+                }
+            }
+
+            return spkItem
+        })
+
+        // Fetch the complete SPK item with related data
+        const completeSpkItem = await prisma.sPK_Item.findUnique({
+            where: { id: result.id },
+            include: {
+                outputItem: { select: { id: true, name: true, code: true } },
+                inputItems: {
+                    include: {
+                        inputItem: {
+                            select: { id: true, name: true, code: true },
+                        },
+                    },
+                },
+                phase: {
+                    select: {
+                        id: true,
+                        stage: true,
+                        status: true,
+                        startDate: true,
+                        completionDate: true,
+                    },
+                },
+            },
+        })
+
+        return res
+            .status(201)
+            .json(
+                successResponse(
+                    completeSpkItem,
+                    'SPK item created successfully',
+                ),
+            )
+    } catch (error) {
+        console.error('Error in createSPKItem:', error)
+        return res.status(500).json(errorResponse('Failed to create SPK item'))
+    }
+}
+
+// Helper function to calculate phase progress percentage
 function calcPhaseProgress(phases: { status: PhaseStatus }[]): number {
     if (!phases || phases.length === 0) {
         return 0
@@ -1188,18 +1719,15 @@ function calcPhaseProgress(phases: { status: PhaseStatus }[]): number {
     return Math.round((completedPhases / totalPhases) * 100)
 }
 
-/**
- * Helper function to calculate total quantity from SPK items
- */
-function calculateTotalQuantity(items: any[], key: string): number {
-    return items.reduce((total, item) => total + (item[key] || 0), 0)
-}
-
 export default {
     getAllSPK,
     getSPKById,
     createSPK,
     updateSPK,
     deleteSPK,
-    updatePhaseProgress,
+    getSPKPhaseByStage,
+    startSPKPhase,
+    completeSPKPhase,
+    deleteSPKPhase,
+    createSPKItem,
 }

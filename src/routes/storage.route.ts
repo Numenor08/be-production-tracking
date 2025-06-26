@@ -38,7 +38,6 @@ router.delete(
 
 // Routes for stock transactions
 router.post('/transfer', storageController.transferStock)
-router.post('/mark-as-waste', storageController.markAsWaste)
 router.get('/by-item/:itemId', storageController.getStorageByItem)
 router.get('/by-spk/:spkId', storageController.getStorageBySPK)
 

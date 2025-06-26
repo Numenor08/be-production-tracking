@@ -16,8 +16,8 @@ datasource db {
 
 enum OrderStatus {
   IN_PROGRESS
-  SPLIT_PROCESSING
   COMPLETED
+  DELIVERED
   IDLE
 }
 
@@ -28,6 +28,7 @@ enum ProcessStage {
 }
 
 enum PalletStatus {
+  NOT_READY
   READY
   SHIPPED
 }
@@ -45,268 +46,351 @@ enum ItemType {
   PRODUCT
 }
 
+enum DeliveryStatus {
+  PENDING
+  IN_TRANSIT
+  DELIVERED
+}
+
+enum UserRole {
+  ADMIN
+  OPERATOR
+}
+
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique
+  password  String   @unique
+  firstName String
+  lastName  String?
+  email     String  @unique
+  phone     String?
+  isActive  Boolean @default(true)
+  role      UserRole @default(OPERATOR)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  sid       String   @unique
+  data      String   @db.Text
+  expiresAt DateTime
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([expiresAt])
+}
+
+
+model Customer {
+  id            String  @id @default(cuid())
+  name          String
+  address       String?
+  phone         String?
+  email         String?
+  contactPerson String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  salesOrders    SalesOrder[]
+}
+
 model SalesOrder {
-  id              String   @id @default(cuid())
-  code            String   @unique
-  customerName    String
-  totalPrice      Int
-  completionDate  DateTime
-  deliveryDate    DateTime
+  id             String   @id @default(cuid())
+  code           String   @unique
+  totalPrice     Int
+  completionDate DateTime
+  deliveryDate   DateTime?
+  status         OrderStatus      @default(IDLE)
 
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  customerId String
+  customer   Customer @relation(fields: [customerId], references: [id])
 
-  items           SalesOrderItem[]
-  spk             SPK[]
-  pallets         Pallet[]
-  status          OrderStatus      @default(IDLE)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  items          SalesOrderItem[]
+  spk            SPK[]
+  pallets        Pallet[]
+  deliveryOrders DeliveryOrder[]
 }
 
 model SPK {
-  id                       String    @id @default(cuid())
-  code                     String    @unique
-  preprocessDeadline       DateTime?
-  processDeadline          DateTime?
-  finishingDeadline        DateTime?
-  preprocessMachineId      String?
-  processMachineId         String?
-  finishingMachineId       String?
+  id                  String    @id @default(cuid())
+  code                String    @unique
+  preprocessDeadline  DateTime?
+  processDeadline     DateTime?
+  finishingDeadline   DateTime?
+  preprocessMachineId String?
+  processMachineId    String?
+  finishingMachineId  String?
 
-  startStage               ProcessStage @default(PREPROCESS)
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  salesOrderId String
+  salesOrderItem SalesOrderItem @relation("SalesOrderItemToSPK", fields: [salesOrderItemId], references: [id], onDelete: Cascade)
+  salesOrderItemId String
+  targetQuantity       Int
 
-  preprocessStatus         PhaseStatus @default(NOT_STARTED)
-  processStatus            PhaseStatus @default(NOT_STARTED)
-  finishingStatus          PhaseStatus @default(NOT_STARTED)
+  startStage ProcessStage @default(PREPROCESS)
 
-  preprocessStartDate      DateTime?
-  processStartDate         DateTime?
-  finishingStartDate       DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  preprocessMachine Machine? @relation("PreprocessMachine", fields: [preprocessMachineId], references: [id], onDelete: SetNull)
+  processMachine    Machine? @relation("ProcessMachine", fields: [processMachineId], references: [id], onDelete: SetNull)
+  finishingMachine  Machine? @relation("FinishingMachine", fields: [finishingMachineId], references: [id], onDelete: SetNull)
 
-  preprocessMachine        Machine? @relation("PreprocessMachine", fields: [preprocessMachineId], references: [id])
-  processMachine           Machine? @relation("ProcessMachine", fields: [processMachineId], references: [id])
-  finishingMachine         Machine? @relation("FinishingMachine", fields: [finishingMachineId], references: [id])
 
-  salesOrder               SalesOrder    @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  salesOrderId             String
-  storageItems             Storage[]
-  machineHistory           MachineHistory[]
-  productionItems          ProductionItem[]
-  phases                   SPK_Phase[]
-  report                   Report?
-  palletItems              PalletItem[]
+  storageItems   Storage[]
+  machineHistory MachineHistory[]
+  spkItems       SPK_Item[]
+  phases         SPK_Phase[]
+  report         Report[]
 }
 
 model SPK_Phase {
-  id              String       @id @default(cuid())
-  spk             SPK @relation(fields: [spkId], references: [id])
-  spkId          String
-  stage           ProcessStage
+  id    String       @id @default(cuid())
+  spk   SPK          @relation(fields: [spkId], references: [id], onDelete: Cascade)
+  spkId String
+  stage ProcessStage
 
-  targetQuantity  Int
-  plannedWaste    Int @default(0)
+  startDate      DateTime?
+  completionDate DateTime?
+  status         PhaseStatus @default(NOT_STARTED)
 
-  actualQuantity  Int @default(0)
-  actualWaste     Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  storageUsed     Int @default(0)
-
-  itemId         String
-  item           Item @relation(fields: [itemId], references: [id])
-
-  startDate       DateTime?
-  completionDate  DateTime?
-  status          PhaseStatus @default(NOT_STARTED)
-
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-
+  spkItems       SPK_Item[]
+  
   @@unique([spkId, stage])
 }
 
-model Report {
-  id                      String @id @default(cuid())
+model SPK_Item {
+  id String @id @default(cuid())
 
-  preprocessDetails       String?
-  processDetails          String?
-  finishingDetails        String?
+  spk   SPK    @relation(fields: [spkId], references: [id], onDelete: Cascade)
+  spkId String
+
+  phase   SPK_Phase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+  phaseId String?
+
+  // One output item
+  outputItem   Item?   @relation("OutputItem", fields: [outputItemId], references: [id], onDelete: SetNull)
+  outputItemId String?
+
+  // Multiple input items through the relation table
+  inputItems SPK_InputItem[]
+
+  type           ItemType
+
+  outputQuantity Int @default(0)
+  wasteQuantity  Int @default(0)
+
+  // Target output quantity and waste
+  targetOutputQuantity Int
+  targetWaste    Int @default(0)
+
+  storageUsed Int @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// New model for input items (many-to-many relationship)
+model SPK_InputItem {
+  id String @id @default(cuid())
+  
+  // Relation to SPK_Item
+  spkItem   SPK_Item @relation(fields: [spkItemId], references: [id], onDelete: Cascade)
+  spkItemId String
+
+  // Relation to Item
+  inputItem   Item @relation(fields: [inputItemId], references: [id], onDelete: Cascade)
+  inputItemId String
+
+  inputQuantity Int
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([spkItemId, inputItemId])
+}
+
+model Report {
+  id   String @id @default(cuid())
+  code String @unique
+
+  preprocessDetails String?
+  processDetails    String?
+  finishingDetails  String?
 
   preprocessCompletionDate DateTime?
   processCompletionDate    DateTime?
   finishingCompletionDate  DateTime?
 
-  // Add phase result summaries
-  preprocessSummary       Json?
-  processSummary          Json?
-  finishingSummary        Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-
-  spkId                   String          @unique
-  spk                     SPK @relation(fields: [spkId], references: [id])
-  reportItems             ReportItem[]
+  spkId       String
+  spk         SPK         @relation(fields: [spkId], references: [id], onDelete: Cascade)
+  reportItems ReportItem[]
 }
 
 model ReportItem {
-  id              String      @id @default(cuid())
-  
-  report          Report      @relation(fields: [reportId], references: [id])
-  reportId        String
-  
-  item            Item        @relation(fields: [itemId], references: [id])
-  itemId          String
-  
-  storage         Storage?    @relation(fields: [storageId], references: [id])
-  storageId       String?
-  
-  phase           ProcessStage
-  quantity        Int
-  wasteQuantity   Int         @default(0)
-  
-  storageUsed     Int         @default(0)
-  
-  notes           String?
+  id String @id @default(cuid())
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  reportId String
+
+  item   Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId String?
+
+  storage   Storage? @relation(fields: [storageId], references: [id], onDelete: SetNull)
+  storageId String?
+
+  phase         ProcessStage
+  quantity      Int
+  wasteQuantity Int          @default(0)
+
+  storageUsed Int @default(0)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Storage {
-  id                String      @id @default(cuid())
-  spk               SPK         @relation(fields: [spkId], references: [id])
-  spkId             String
-  
-  item              Item        @relation(fields: [itemId], references: [id])
-  itemId            String
-  
-  productionStage   ProcessStage
-  stock             Int         @default(0)
-  wasteStock        Int         @default(0)
-  
-  isWaste           Boolean     @default(false)
-  
-  reportItems       ReportItem[]
-  
-  createdAt         DateTime    @default(now())
-  updatedAt         DateTime    @updatedAt
-  
-  palletItems       PalletItem[]
-  
-  @@unique([spkId, itemId, productionStage, isWaste])
+  id    String @id @default(cuid())
+  spk   SPK?    @relation(fields: [spkId], references: [id], onDelete: SetNull)
+  spkId String?
+
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId String
+
+  spkStage ProcessStage
+  stock           Int          @default(0)
+
+  reportItems ReportItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  palletItems PalletItem[]
+
+  @@unique([spkId, itemId, spkStage])
 }
 
 model Item {
-  id              String   @id @default(cuid())
-  name            String
-  type            ItemType
-  price           Int?
+  id    String   @id @default(cuid())
+  code  String   @unique
+  name  String
+  type  ItemType
+  price Int?
 
-  salesOrderItems SalesOrderItem[]
-  productionPhases SPK_Phase[]
+  salesOrderItems  SalesOrderItem[]
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-  storageItems    Storage[]
-  inputItems      ProductionItem[] @relation("InputItem")
-  outputItems     ProductionItem[] @relation("OutputItem")
-  reportItems     ReportItem[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  storageItems Storage[]
+  inputItemRelations SPK_InputItem[] 
+  outputItems  SPK_Item[]   @relation("OutputItem")
+  reportItems  ReportItem[]
 }
 
 model SalesOrderItem {
-  id              String @id @default(cuid())
+  id String @id @default(cuid())
 
-  salesOrder      SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
-  salesOrderId    String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  salesOrderId String
 
-  item            Item? @relation(fields: [itemId], references: [id])
-  itemId         String?
+  item   Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
+  itemId String?
 
-  quantity        Int
-  remainingQuantity Int @default(0)
+  targetQuantity    Int
+  remainingQuantity Int
+  actualQuantity   Int @default(0)
   fullyPlanned      Boolean @default(false)
+
+  spks SPK[] @relation("SalesOrderItemToSPK")
 
   @@unique([salesOrderId, itemId])
 }
 
 model Machine {
-  id                   String         @id @default(cuid())
-  name                 String
-  details              String
-  type                 ProcessStage
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  history              MachineHistory[]
-  preprocessOrders     SPK[] @relation("PreprocessMachine")
-  processOrders        SPK[] @relation("ProcessMachine")
-  finishingOrders      SPK[] @relation("FinishingMachine")
-}
-
-model ProductionItem {
-  id                   String @id @default(cuid())
-
-  spk                  SPK @relation(fields: [spkId], references: [id])
-  spkId                String
-
-  inputItem            Item @relation("InputItem", fields: [inputItemId], references: [id])
-  inputItemId          String
-
-  outputItem           Item @relation("OutputItem", fields: [outputItemId], references: [id])
-  outputItemId         String
-
-  type                 ItemType
-  inputQuantity        Int
-  outputQuantity       Int
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id               String           @id @default(cuid())
+  name             String
+  details          String
+  type             ProcessStage
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  history          MachineHistory[]
+  preprocessOrders SPK[]            @relation("PreprocessMachine")
+  processOrders    SPK[]            @relation("ProcessMachine")
+  finishingOrders  SPK[]            @relation("FinishingMachine")
 }
 
 model MachineHistory {
-  id                   String @id @default(cuid())
-  machineId            String
-  spkId                String
+  id        String @id @default(cuid())
+  machineId String
+  machine Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
 
-  machine              Machine @relation(fields: [machineId], references: [id], onDelete: Cascade)
-  spk                  SPK @relation(fields: [spkId], references: [id])
+  spkId     String
+  spk     SPK     @relation(fields: [spkId], references: [id], onDelete: Cascade)
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  status               Int
-  details              String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  details   String
 
   @@unique([machineId, spkId])
 }
 
 model Pallet {
-  id                   String      @id @default(cuid())
-  code                 String      @unique
-  status               PalletStatus @default(READY)
-  qrCodeData           String      @unique
-  salesOrderId         String?
-  salesOrder           SalesOrder?  @relation(fields: [salesOrderId], references: [id], onDelete: SetNull)
-  createdAt            DateTime    @default(now())
-  updatedAt            DateTime    @updatedAt
+  id           String       @id @default(cuid())
+  code         String       @unique
+  status       PalletStatus @default(READY)
+  qrCodeData   String?
+  salesOrderId String
+  salesOrder   SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
-  items                PalletItem[]
+  deliveryOrderId String?
+  deliveryOrder   DeliveryOrder? @relation(fields: [deliveryOrderId], references: [id], onDelete: SetNull)
+  items              PalletItem[]
 }
 
 model PalletItem {
-  id                   String @id @default(cuid())
-  quantity             Int
+  id       String @id @default(cuid())
+  quantity Int
 
-  palletId             String
-  pallet               Pallet @relation(fields: [palletId], references: [id], onDelete: Cascade)
+  palletId String
+  pallet   Pallet @relation(fields: [palletId], references: [id], onDelete: Cascade)
 
-  storageItemId        String
-  storageItem          Storage @relation(fields: [storageItemId], references: [id])
+  storageItemId String
+  storageItem   Storage @relation(fields: [storageItemId], references: [id], onDelete: Cascade)
 
-  spkId                String
-  spk                  SPK @relation(fields: [spkId], references: [id])
+  @@unique([palletId, storageItemId])
+}
 
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+model DeliveryOrder {
+  id           String         @id @default(cuid())
+  code         String         @unique
+  deliveryDate DateTime
+  status       DeliveryStatus @default(PENDING)
 
-  @@unique([palletId, storageItemId, spkId])
+  salesOrderId String
+  salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pallets Pallet[]
 }
