@@ -69,6 +69,13 @@ export const getAllStorage = async (
             orderBy: { updatedAt: 'desc' },
         })
 
+        // Calculate totals stock each item
+        const total: Record<string, number> = {}
+        storageItems.forEach((item) => {
+            const key = `${item.item.name}`
+            total[key] = (total[key] || 0) + item.stock
+        })
+
         return res.json(
             successResponse(
                 storageItems,
@@ -252,24 +259,12 @@ export const deleteStorage = async (
         const existingStorage = await prisma.storage.findUnique({
             where: { id },
             include: {
-                reportItems: true,
                 palletItems: true,
             },
         })
 
         if (!existingStorage) {
             return res.status(404).json(errorResponse('Storage item not found'))
-        }
-
-        // Check if storage is in use
-        if (existingStorage.reportItems.length > 0) {
-            return res
-                .status(400)
-                .json(
-                    errorResponse(
-                        'Cannot delete storage item that is referenced in reports',
-                    ),
-                )
         }
 
         if (existingStorage.palletItems.length > 0) {
@@ -493,6 +488,254 @@ export const getStorageBySPK = async (
     }
 }
 
+export const reduceStockByItem = async (
+    req: Request, 
+    res: Response
+): Promise<any> => {
+    try {
+        const { itemId, quantity } = req.body
+        
+        if (!itemId || !quantity || quantity <= 0) {
+            return res.status(400).json(errorResponse('Valid itemId and positive quantity are required'))
+        }
+
+        // Verify the item exists
+        const item = await prisma.item.findUnique({
+            where: { id: itemId }
+        })
+
+        if (!item) {
+            return res.status(404).json(errorResponse('Item not found'))
+        }
+
+        // Use the utility function
+        const result = await reduceStockFromStorage(prisma, itemId, quantity)
+
+        if (!result.success) {
+            return res.status(400).json(errorResponse(result.message))
+        }
+
+        return res.json(successResponse(
+            { 
+                itemId,
+                itemName: item.name,
+                quantityReduced: quantity,
+                updates: result.updates 
+            },
+            'Stock reduced successfully'
+        ))
+    } catch (error) {
+        console.error('Error in reduceStockByItem:', error)
+        return res.status(500).json(errorResponse(
+            `Failed to reduce stock: ${(error as Error).message}`
+        ))
+    }
+}
+
+export const addStockByItem = async (
+    req: Request, 
+    res: Response
+): Promise<any> => {
+    try {
+        const { itemId, spkId, quantity, stage } = req.body
+        
+        if (!itemId || !spkId || !quantity || quantity <= 0 || !stage) {
+            return res.status(400).json(errorResponse(
+                'Valid itemId, spkId, stage, and positive quantity are required'
+            ))
+        }
+
+        // Use the utility function
+        const result = await addStockToStorage(prisma, itemId, spkId, quantity, stage as ProcessStage)
+
+        if (!result.success) {
+            return res.status(400).json(errorResponse(result.message))
+        }
+
+        return res.json(successResponse(
+            {
+                storage: result.storage,
+                quantityAdded: quantity
+            },
+            'Stock added successfully'
+        ))
+    } catch (error) {
+        console.error('Error in addStockByItem:', error)
+        return res.status(500).json(errorResponse(
+            `Failed to add stock: ${(error as Error).message}`
+        ))
+    }
+}
+
+//  Utility function to reduce stock from storage that can be called from other controllers
+export const reduceStockFromStorage = async (
+    prismaInstance: PrismaClient,
+    itemId: string,
+    quantity: number
+): Promise<{success: boolean, message: string, updates?: any[]}> => {
+    try {
+        if (!itemId || !quantity || quantity <= 0) {
+            return {success: false, message: 'Valid itemId and positive quantity are required'}
+        }
+
+        // Find all storage entries for this item, ordered by oldest first (FIFO)
+        const storageItems = await prismaInstance.storage.findMany({
+            where: { 
+                itemId,
+                stock: { gt: 0 } 
+            },
+            orderBy: { createdAt: 'asc' },
+            include: {
+                item: {
+                    select: {
+                        name: true
+                    }
+                }
+            }
+        })
+
+        const totalAvailable = storageItems.reduce((sum, item) => sum + item.stock, 0)
+        
+        // Quickly return false if there's not enough stock
+        if (totalAvailable < quantity) {
+            const itemName = storageItems.length > 0 ? storageItems[0].item.name : '(unknown)';
+            return {
+                success: false, 
+                message: `Insufficient stock for item ${itemName}. Requested: ${quantity}, Available: ${totalAvailable}`
+            }
+        }
+
+        // Run everything in a transaction to ensure consistency
+        const updates = await prismaInstance.$transaction(async (tx) => {
+            let remainingToReduce = quantity;
+            const updateList = [];
+            
+            for (const storage of storageItems) {
+                if (remainingToReduce <= 0) break
+                
+                const toReduce = Math.min(storage.stock, remainingToReduce)
+                
+                // Update the storage entry
+                const updated = await tx.storage.update({
+                    where: { id: storage.id },
+                    data: { stock: { decrement: toReduce } },
+                    include: {
+                        spk: { select: { code: true } },
+                        item: { select: { name: true } }
+                    }
+                })
+                
+                updateList.push({
+                    storageId: storage.id,
+                    spkCode: updated.spk?.code,
+                    itemName: updated.item.name,
+                    reduced: toReduce,
+                    remaining: updated.stock
+                })
+                
+                remainingToReduce -= toReduce
+            }
+            
+            // Clean up any storage entries that now have 0 stock
+            await tx.storage.deleteMany({
+                where: { 
+                    itemId,
+                    stock: 0 
+                }
+            })
+            
+            return updateList;
+        });
+
+        return {
+            success: true,
+            message: 'Stock reduced successfully',
+            updates
+        }
+    } catch (error) {
+        console.error('Error in reduceStockFromStorage:', error)
+        return {success: false, message: (error as Error).message}
+    }
+}
+
+export const addStockToStorage = async (
+    prismaInstance: PrismaClient,
+    itemId: string,
+    spkId: string,
+    quantity: number,
+    stage: ProcessStage
+): Promise<{success: boolean, message: string, storage?: any}> => {
+    try {
+        if (!itemId || !spkId || !quantity || quantity <= 0) {
+            return {success: false, message: 'Valid itemId, spkId, and positive quantity are required'}
+        }
+
+        // Verify item and SPK exist
+        const item = await prismaInstance.item.findUnique({
+            where: { id: itemId }
+        });
+
+        if (!item) {
+            return {success: false, message: `Item with ID ${itemId} not found`};
+        }
+
+        const spk = await prismaInstance.sPK.findUnique({
+            where: { id: spkId }
+        });
+
+        if (!spk) {
+            return {success: false, message: `SPK with ID ${spkId} not found`};
+        }
+
+        // Run in a transaction
+        const result = await prismaInstance.$transaction(async (tx) => {
+            // Check if storage entry already exists
+            const existingStorage = await tx.storage.findFirst({
+                where: {
+                    spkId,
+                    itemId,
+                    spkStage: stage
+                }
+            });
+
+            if (existingStorage) {
+                // Update existing storage
+                return await tx.storage.update({
+                    where: { id: existingStorage.id },
+                    data: { stock: { increment: quantity } },
+                    include: {
+                        item: { select: { name: true } },
+                        spk: { select: { code: true } }
+                    }
+                });
+            } else {
+                // Create new storage entry
+                return await tx.storage.create({
+                    data: {
+                        spkId,
+                        itemId,
+                        spkStage: stage,
+                        stock: quantity
+                    },
+                    include: {
+                        item: { select: { name: true } },
+                        spk: { select: { code: true } }
+                    }
+                });
+            }
+        });
+
+        return {
+            success: true,
+            message: 'Stock added successfully',
+            storage: result
+        }
+    } catch (error) {
+        console.error('Error in addStockToStorage:', error)
+        return {success: false, message: (error as Error).message}
+    }
+}
+
 export default {
     getAllStorage,
     getStorageById,
@@ -502,4 +745,6 @@ export default {
     transferStock,
     getStorageByItem,
     getStorageBySPK,
+    reduceStockByItem,
+    addStockByItem,
 }

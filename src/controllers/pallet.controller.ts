@@ -68,12 +68,6 @@ export const getAllPallets = async (
                                 item: true,
                             },
                         },
-                        spk: {
-                            select: {
-                                id: true,
-                                code: true,
-                            },
-                        },
                     },
                 },
             },
@@ -140,13 +134,6 @@ export const getPalletById = async (
                                         code: true,
                                     },
                                 },
-                            },
-                        },
-                        spk: {
-                            select: {
-                                id: true,
-                                code: true,
-                                salesOrderId: true,
                             },
                         },
                     },
@@ -440,10 +427,9 @@ export const addPalletItem = async (
             // Check if an item for this storage already exists in the pallet
             const existingPalletItem = await tx.palletItem.findUnique({
                 where: {
-                    palletId_storageItemId_spkId: {
+                    palletId_storageItemId: {
                         palletId,
                         storageItemId: storageId,
-                        spkId,
                     },
                 },
             })
@@ -473,7 +459,6 @@ export const addPalletItem = async (
                     data: {
                         pallet: { connect: { id: palletId } },
                         storageItem: { connect: { id: storageId } },
-                        spk: { connect: { id: spkId } },
                         quantity,
                     },
                     include: {

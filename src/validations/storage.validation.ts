@@ -65,3 +65,27 @@ export const itemIdStorageValidation = [
 export const spkIdStorageValidation = [
     param('spkId').isString().withMessage('SPK ID is required'),
 ]
+
+export const reduceStockValidation = [
+    body('itemId')
+        .isString()
+        .withMessage('Item ID is required'),
+    body('quantity')
+        .isInt({ min: 1 })
+        .withMessage('Quantity must be a positive integer'),
+]
+
+export const addStockValidation = [
+    body('itemId')
+        .isString()
+        .withMessage('Item ID is required'),
+    body('spkId')
+        .isString()
+        .withMessage('SPK ID is required'),
+    body('quantity')
+        .isInt({ min: 1 })
+        .withMessage('Quantity must be a positive integer'),
+    body('stage')
+        .isIn(Object.values(ProcessStage))
+        .withMessage('Valid production stage is required'),
+]

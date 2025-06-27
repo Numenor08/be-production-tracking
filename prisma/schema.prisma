@@ -67,6 +67,7 @@ model User {
   phone     String?
   isActive  Boolean @default(true)
   role      UserRole @default(OPERATOR)
+  report    ProductionReport[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -83,7 +84,6 @@ model Session {
 
   @@index([expiresAt])
 }
-
 
 model Customer {
   id            String  @id @default(cuid())
@@ -116,7 +116,7 @@ model SalesOrder {
   items          SalesOrderItem[]
   spk            SPK[]
   pallets        Pallet[]
-  deliveryOrders DeliveryOrder[]
+  deliveryOrders DeliveryOrder?
 }
 
 model SPK {
@@ -149,7 +149,6 @@ model SPK {
   machineHistory MachineHistory[]
   spkItems       SPK_Item[]
   phases         SPK_Phase[]
-  report         Report[]
 }
 
 model SPK_Phase {
@@ -165,8 +164,10 @@ model SPK_Phase {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  spkItems       SPK_Item[]
+  spkItems      SPK_Item[]
   
+  productionReport ProductionReport? @relation(name: "ProductionReportToSPK_Phase")
+
   @@unique([spkId, stage])
 }
 
@@ -199,6 +200,8 @@ model SPK_Item {
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
+
+  productionReports ProductionReport[] @relation(name: "ProductionReportToSPK_Item")
 }
 
 // New model for input items (many-to-many relationship)
@@ -221,53 +224,9 @@ model SPK_InputItem {
   @@unique([spkItemId, inputItemId])
 }
 
-model Report {
-  id   String @id @default(cuid())
-  code String @unique
-
-  preprocessDetails String?
-  processDetails    String?
-  finishingDetails  String?
-
-  preprocessCompletionDate DateTime?
-  processCompletionDate    DateTime?
-  finishingCompletionDate  DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  spkId       String
-  spk         SPK         @relation(fields: [spkId], references: [id], onDelete: Cascade)
-  reportItems ReportItem[]
-}
-
-model ReportItem {
-  id String @id @default(cuid())
-
-  report   Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
-  reportId String
-
-  item   Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  itemId String?
-
-  storage   Storage? @relation(fields: [storageId], references: [id], onDelete: SetNull)
-  storageId String?
-
-  phase         ProcessStage
-  quantity      Int
-  wasteQuantity Int          @default(0)
-
-  storageUsed Int @default(0)
-
-  notes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model Storage {
   id    String @id @default(cuid())
-  spk   SPK?    @relation(fields: [spkId], references: [id], onDelete: SetNull)
+  spk   SPK?    @relation(fields: [spkId], references: [id], onDelete: Cascade)
   spkId String?
 
   item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
@@ -275,8 +234,6 @@ model Storage {
 
   spkStage ProcessStage
   stock           Int          @default(0)
-
-  reportItems ReportItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -289,7 +246,7 @@ model Storage {
 model Item {
   id    String   @id @default(cuid())
   code  String   @unique
-  name  String
+  name  String   @unique
   type  ItemType
   price Int?
 
@@ -300,7 +257,6 @@ model Item {
   storageItems Storage[]
   inputItemRelations SPK_InputItem[] 
   outputItems  SPK_Item[]   @relation("OutputItem")
-  reportItems  ReportItem[]
 }
 
 model SalesOrderItem {
@@ -324,6 +280,7 @@ model SalesOrderItem {
 
 model Machine {
   id               String           @id @default(cuid())
+  code             String           @unique
   name             String
   details          String
   type             ProcessStage
@@ -384,7 +341,7 @@ model DeliveryOrder {
   deliveryDate DateTime
   status       DeliveryStatus @default(PENDING)
 
-  salesOrderId String
+  salesOrderId String @unique
   salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
 
   notes String?
@@ -393,4 +350,49 @@ model DeliveryOrder {
   updatedAt DateTime @updatedAt
 
   pallets Pallet[]
+}
+
+enum ProductionReportTag {
+  STORAGE_USED
+  WASTE_USED
+  BELOW_TARGET
+  FULL_PLANNED
+  ABOVE_TARGET
+}
+
+model ProductionReport {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  spkPhaseId  String @unique
+  spkPhase SPK_Phase @relation(name: "ProductionReportToSPK_Phase", fields: [spkPhaseId], references: [id], onDelete: Cascade)
+
+
+  stage       ProcessStage
+  
+  // User attribution
+  confirmedByUserId String?
+  confirmedByUser   User?    @relation(fields: [confirmedByUserId], references: [id], onDelete: SetNull)
+  confirmedDate     DateTime?
+
+  // Related models
+  spkItemId        String
+  spkItem          SPK_Item @relation(name: "ProductionReportToSPK_Item", fields: [spkItemId], references: [id], onDelete: Cascade)
+  
+  // Metrics summary
+  targetQuantity       Int
+  actualQuantity       Int
+  wasteQuantity        Int
+  totalStorageUsed     Int
+
+  // Additional data
+  notes             String?
+  
+  // Tags as JSON array for multiple conditions
+  tags              Json?
+  
+  // Computation results
+  differenceToTarget Int // Negative = below target, Positive = above target with waste considered
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 }

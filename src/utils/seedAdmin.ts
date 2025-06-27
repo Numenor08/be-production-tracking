@@ -12,6 +12,7 @@ const seedAdminUser = async () => {
 
         if (existingAdmin) {
             console.log('❌ Admin user already exists')
+            console.log('Please remove the existing admin user before running the seeder again.')
             return
         }
 

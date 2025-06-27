@@ -1,33 +1,23 @@
 import express from 'express'
-import reportController from '../controllers/report.controller'
 import { validate } from '../middlewares/validation.middleware'
+import reportController from '../controllers/report.controller'
 import {
-    reportIdValidation,
-    updateReportValidation,
-    reportItemIdValidation,
-    updateReportItemValidation,
+    getAllProductionReportValidation,
+    getProductionReportByIdValidation,
 } from '../validations/report.validation'
 
 const router = express.Router()
 
-// Report routes
-router.get('/', reportController.getAllReports)
-router.get('/:id', validate(reportIdValidation), reportController.getReportById)
-router.put(
+router.get(
+    '/',
+    validate(getAllProductionReportValidation),
+    reportController.getAllProductionReport,
+)
+
+router.get(
     '/:id',
-    validate([...reportIdValidation, ...updateReportValidation]),
-    reportController.updateReport,
+    validate(getProductionReportByIdValidation),
+    reportController.getProductionReportById,
 )
 
-router.put(
-    '/items/:itemId',
-    validate([...reportItemIdValidation, ...updateReportItemValidation]),
-    reportController.updateReportItem,
-)
-router.delete(
-    '/items/:itemId',
-    validate(reportItemIdValidation),
-    reportController.deleteReportItem,
-)
-
-export default router
+export default router;

@@ -11,6 +11,8 @@ import {
     generateSPKCode,
     generateItemCode,
 } from '../libs/generate'
+import { createProductionReport } from './report.controller'
+import { reduceStockFromStorage, addStockToStorage } from './storage.controller'
 
 const prisma = new PrismaClient()
 
@@ -304,18 +306,6 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
                 finishingMachine: {
                     select: { id: true, name: true, type: true },
                 },
-                report: {
-                    include: {
-                        reportItems: {
-                            include: {
-                                item: true,
-                            },
-                        },
-                    },
-                    orderBy: {
-                        createdAt: 'desc',
-                    },
-                },
             },
         })
 
@@ -360,10 +350,6 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
         const overallProgress = Math.round(
             (progress.preprocess + progress.process + progress.finishing) / 3,
         )
-
-        // Get the most recent report for timeline completion data
-        const latestReport =
-            spk.report && spk.report.length > 0 ? spk.report[0] : null
 
         // Get start dates from phases
         const preprocessPhase = phases.find(
@@ -421,7 +407,7 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
     }
 }
 
-// Create a new production order with updated structure
+// Create a new production order
 export const createSPK = async (req: Request, res: Response): Promise<any> => {
     try {
         const {
@@ -585,10 +571,6 @@ export const createSPK = async (req: Request, res: Response): Promise<any> => {
                 where: { id: salesOrderItemId },
                 data: {
                     remainingQuantity: { decrement: targetQuantity },
-                    fullyPlanned: {
-                        set:
-                            salesOrderItem.remainingQuantity === targetQuantity,
-                    },
                 },
             })
 
@@ -960,7 +942,6 @@ export const deleteSPK = async (req: Request, res: Response): Promise<any> => {
                 salesOrderItem: true,
                 phases: true,
                 storageItems: true,
-                report: true,
                 spkItems: {
                     include: {
                         outputItem: true,
@@ -1204,12 +1185,6 @@ export const completeSPKPhase = async (
                         },
                     },
                 },
-                report: {
-                    orderBy: {
-                        createdAt: 'desc',
-                    },
-                    take: 1,
-                },
             },
         })
 
@@ -1252,13 +1227,13 @@ export const completeSPKPhase = async (
                 },
             })
 
-            // Process each SPK item result
+            // Process SPK item result
             const {
                 spkItemId,
                 actualQuantity,
                 actualWaste,
                 storageUsed = 0,
-                storageId = null,
+                storageItemId = null,
             } = spkItemsResult
 
             // Find the original SPK item
@@ -1267,28 +1242,54 @@ export const completeSPKPhase = async (
                 throw new Error(`SPK item with ID ${spkItemId} not found`)
             }
 
+            let combinedQuantity: number = actualQuantity + actualWaste
+
             // If storage is being used, verify and update storage
-            if (storageUsed > 0 && storageId) {
+            if (storageUsed > 0 && storageItemId) {
+
+                if( actualQuantity >= spkItem.targetOutputQuantity ) {
+                    throw new Error(`Doesn't need to use storage, actual quantity ${actualQuantity} is greater than or equal to target output quantity ${spkItem.targetOutputQuantity}`)
+                }
+                
                 // Check if we have enough stock in the storage
-                const storage = await prisma.storage.findUnique({
-                    where: { id: storageId },
+                const storage = await prisma.storage.findMany({
+                    where: { itemId: storageItemId },
                 })
 
                 if (!storage) {
-                    throw new Error(`Storage with ID ${storageId} not found`)
+                    throw new Error(`Storage with itemID ${storageItemId} not found`)
                 }
 
-                if (storage.stock < storageUsed) {
+                const totalStorageStock = storage.reduce(
+                    (acc, curr) => acc + curr.stock,
+                    0
+                )
+
+                if (totalStorageStock < storageUsed) {
                     throw new Error(
-                        `Not enough stock in storage. Available: ${storage.stock}, Requested: ${storageUsed}`,
+                        `Not enough stock in storage. Available: ${totalStorageStock}, Requested: ${storageUsed}`,
                     )
                 }
 
-                // Update storage to reduce stock
-                await prisma.storage.update({
-                    where: { id: storageId },
-                    data: { stock: { decrement: storageUsed } },
-                })
+                // Reduce storage stock, borrowing from multiple storage records if needed
+                let remainingToBorrow = storageUsed;
+                for (const storagePerItem of storage) {
+                    if (remainingToBorrow <= 0) break;
+                    const available = storagePerItem.stock;
+                    if (available <= 0) continue;
+
+                    const toDecrement = Math.min(available, remainingToBorrow);
+                    await prisma.storage.update({
+                        where: { id: storagePerItem.id },
+                        data: { stock: { decrement: toDecrement } },
+                    });
+                    remainingToBorrow -= toDecrement;
+                }
+                if (remainingToBorrow > 0) {
+                    throw new Error(
+                        `Not enough stock in storage. Still need: ${remainingToBorrow}`
+                    );
+                }
             }
 
             // Update the SPK item with actual quantities
@@ -1316,7 +1317,7 @@ export const completeSPKPhase = async (
                         where: { id: existingStorage.id },
                         data: {
                             stock: {
-                                increment: actualQuantity,
+                                increment: combinedQuantity,
                             },
                         },
                     })
@@ -1326,50 +1327,74 @@ export const completeSPKPhase = async (
                             spkId: id,
                             itemId: spkItem.outputItemId,
                             spkStage: stage,
-                            stock: actualQuantity,
+                            stock: combinedQuantity,
                         },
                     })
                 }
             }
 
             // If this is the last Phase will update the sales order item and sales order
-            if (spk.phases.every((p) => p.status === PhaseStatus.COMPLETED)) {
+            const updatedSPK = await prisma.sPK.findUnique({
+                where: { id },
+                include: {
+                    phases: true,
+                    salesOrderItem: true,
+                },
+            })
+            
+            if (!updatedSPK) {
+                throw new Error(`Cant update Sales Order Item, SPK with ID ${id} not found`)
+            }
+
+            if (updatedSPK.phases.every((p) => p.status === PhaseStatus.COMPLETED)) {
                 // Update sales order item to mark it as completed
+                let isFullyPlanned: boolean = false;
+                let combinedQuantity: number = actualQuantity;
+
+                if (combinedQuantity < updatedSPK.targetQuantity) {
+                    combinedQuantity += actualWaste;
+                } 
+                if (combinedQuantity < updatedSPK.targetQuantity && storageUsed > 0) {
+                    combinedQuantity += storageUsed;
+                } else if (combinedQuantity > updatedSPK.targetQuantity) {
+                    combinedQuantity = updatedSPK.targetQuantity;
+                }
+
+                if (combinedQuantity + updatedSPK.salesOrderItem.actualQuantity >= updatedSPK.salesOrderItem.targetQuantity) {
+                    isFullyPlanned = true;
+                }
+
                 await prisma.salesOrderItem.update({
-                    where: { id: spk.salesOrderItemId },
+                    where: { id: updatedSPK.salesOrderItemId },
                     data: {
-                        remainingQuantity: 0,
-                        fullyPlanned: true,
+                        actualQuantity: combinedQuantity,
+                        fullyPlanned: isFullyPlanned,
                     },
                 })
 
                 // Update sales order status to COMPLETED
                 await prisma.salesOrder.update({
-                    where: { id: spk.salesOrderId },
+                    where: { id: updatedSPK.salesOrderId },
                     data: { status: OrderStatus.COMPLETED },
                 })
             }
+
+            // Create a production report for this SPK item
+            const userId = (req.session as any)?.user?.id || null;
+            await createProductionReport(
+                prisma,
+                spk.id,
+                phase.id,
+                spkItemId,
+                stage,
+                actualQuantity,
+                actualWaste,
+                storageUsed,
+                userId,
+                notes,
+                date ? new Date(date) : new Date(),
+            )
             
-
-            // Update the SPK status based on the stage
-            const updateSPKData: any = {}
-            switch (stage) {
-                case ProcessStage.PREPROCESS:
-                    updateSPKData.preprocessStatus = PhaseStatus.COMPLETED
-                    break
-                case ProcessStage.PROCESS:
-                    updateSPKData.processStatus = PhaseStatus.COMPLETED
-                    break
-                case ProcessStage.FINISHING:
-                    updateSPKData.finishingStatus = PhaseStatus.COMPLETED
-                    break
-            }
-
-            await prisma.sPK.update({
-                where: { id },
-                data: updateSPKData,
-            })
-
             return {
                 // report: newReport,
                 updatedPhase,
@@ -1591,14 +1616,24 @@ export const createSPKItem = async (
 
             const code = await generateItemCode(type as ItemType)
 
-            const newItem = await prisma.item.create({
-                data: {
-                    name: itemName,
-                    type: type as ItemType,
-                    code,
-                },
+            // Check if the item already exists
+            const existingItem = await prisma.item.findUnique({
+                where: { name: itemName },
             })
-            finalOutputItemId = newItem.id
+
+            if (existingItem) {
+                finalOutputItemId = existingItem.id
+            } else {
+                const newItem = await prisma.item.create({
+                    data: {
+                        name: itemName,
+                        type: type as ItemType,
+                        code,
+                    },
+                })
+                finalOutputItemId = newItem.id
+            }
+
         } else {
             // Verify that the output item exists
             const outputItem = await prisma.item.findUnique({
@@ -1632,6 +1667,35 @@ export const createSPKItem = async (
                     .status(400)
                     .json(
                         errorResponse('Input items cannot be of type PRODUCT'),
+                    )
+            }
+        }
+
+        // Reduce input items stock in storage
+        for (const inputItem of inputItems) {
+            const storageItem = await prisma.storage.findFirst({
+                where: {
+                    itemId: inputItem.inputItemId,
+                },
+            })
+
+            if (!storageItem) {
+                throw new Error(`Storage item not found for input item: ${inputItem.inputItemId}`)
+            }
+
+            const result = await reduceStockFromStorage(
+                prisma,
+                inputItem.inputItemId,
+                inputItem.inputQuantity
+            )
+
+            if (!result.success) {
+                return res
+                    .status(400)
+                    .json(
+                        errorResponse(
+                            `Failed to reduce stock for input item ${inputItem.inputItemId}: ${result.message}`,
+                        ),
                     )
             }
         }

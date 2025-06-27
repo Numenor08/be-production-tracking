@@ -29,19 +29,17 @@ export const cleanupExpiredSessions = async () => {
  * Runs every hour to clean up expired sessions
  */
 export const startSessionCleanup = () => {
-    // Run cleanup every hour
-    cron.schedule('0 * * * *', async () => {
-        console.log('🔄 Running automatic session cleanup...')
+    // Run cleanup every 24 hours
+    cron.schedule('0 0 * * *', async () => {
+        console.log('🔄 Running daily session cleanup...')
         await cleanupExpiredSessions()
     })
 
     // Run initial cleanup on startup
-    setTimeout(async () => {
-        console.log('🔄 Running initial session cleanup...')
-        await cleanupExpiredSessions()
-    }, 5000) // Wait 5 seconds after startup
-
-    console.log('✅ Session cleanup scheduler started')
+    console.log('🔄 Running initial session cleanup...')
+    cleanupExpiredSessions().finally(() => {
+        console.log('✅ Initial session cleanup completed')
+    })
 }
 
 /**

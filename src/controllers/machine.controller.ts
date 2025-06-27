@@ -2,6 +2,7 @@ import { Request, Response } from 'express'
 import { PrismaClient } from '../../generated/prisma'
 import { ProcessStage } from '../types/types'
 import { successResponse, errorResponse } from '../utils/api.utils'
+import { generateMachineCode } from '../libs/generate'
 
 const prisma = new PrismaClient()
 
@@ -54,9 +55,6 @@ export const getAllMachines = async (
             orderBy,
             skip,
             take: limit,
-            include: {
-                history: true,
-            },
         })
 
         // Format response using utility
@@ -113,8 +111,20 @@ export const createMachine = async (
     try {
         const { name, details, type } = req.body
 
+        const existingMachine = await prisma.machine.findFirst({
+            where: { name },
+        })
+        
+        if (existingMachine) {
+            return res.status(400).json(
+                errorResponse('Machine with this name already exists'),
+            )
+        }
+        
+        const code = await generateMachineCode(type as ProcessStage)
         const machine = await prisma.machine.create({
             data: {
+                code,
                 name,
                 details,
                 type: type as ProcessStage,
@@ -139,6 +149,17 @@ export const updateMachine = async (
         const { id } = req.params
         const { name, details, type } = req.body
 
+        // Validate name exists
+        const nameExists = await prisma.machine.findFirst({
+            where: { name, id: { not: id } },
+        })
+        
+        if (nameExists) {
+            return res.status(400).json(
+                errorResponse('Machine with this name already exists'),
+            )
+        }
+        
         // Check if machine exists
         const existing = await prisma.machine.findUnique({ where: { id } })
         if (!existing) {

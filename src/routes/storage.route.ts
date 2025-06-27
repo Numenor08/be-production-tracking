@@ -6,6 +6,8 @@ import {
     createStorageValidation,
     updateStorageValidation,
     storageQueryValidation,
+    addStockValidation,
+    reduceStockValidation,
 } from '../validations/storage.validation'
 
 const router = express.Router()
@@ -34,6 +36,18 @@ router.delete(
     '/:id',
     validate(storageIdValidation),
     storageController.deleteStorage,
+)
+
+router.post(
+    '/add-stock',
+    validate(addStockValidation),
+    storageController.addStockByItem
+)
+
+router.put(
+    '/reduce-stock',
+    validate(reduceStockValidation),
+    storageController.reduceStockByItem
 )
 
 // Routes for stock transactions

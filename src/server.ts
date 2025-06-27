@@ -19,6 +19,7 @@ import {
     setPort,
 } from './middlewares/routelogger.middleware'
 import { startSessionCleanup } from './utils/sessionCleanup'
+import { requireAuth } from './middlewares/auth.middleware'
 import cors from 'cors'
 import colors from 'colors'
 
@@ -69,14 +70,14 @@ app.use(routeLogger)
 const apiV1Router = express.Router()
 
 apiV1Router.use('/auth', userRoute)
-apiV1Router.use('/customer', customerRoute)
-apiV1Router.use('/sales-order', salesOrderRoute)
-apiV1Router.use('/storage', storageRoute)
-apiV1Router.use('/machine', machineRouter)
-apiV1Router.use('/item', itemRoutes)
-apiV1Router.use('/spk', spkRoutes)
-apiV1Router.use('/report', reportRoute)
-// apiV1Router.use('/pallet', palletRoute)
+apiV1Router.use('/customer', requireAuth, customerRoute)
+apiV1Router.use('/sales-order', requireAuth, salesOrderRoute)
+apiV1Router.use('/storage', requireAuth, storageRoute)
+apiV1Router.use('/machine', requireAuth, machineRouter)
+apiV1Router.use('/item', requireAuth, itemRoutes)
+apiV1Router.use('/spk', requireAuth, spkRoutes)
+apiV1Router.use('/report', requireAuth, reportRoute)
+apiV1Router.use('/pallet', requireAuth, palletRoute)
 
 app.use('/api/v1', apiV1Router)
 

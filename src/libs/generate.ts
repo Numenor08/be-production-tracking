@@ -1,5 +1,5 @@
 import { PrismaClient } from '../../generated/prisma'
-import { ItemType } from '../types/types'
+import { ItemType, ProcessStage } from '../types/types'
 
 const prisma = new PrismaClient()
 
@@ -87,20 +87,46 @@ export const generatePalletCode = async (): Promise<string> => {
     throw new Error('Failed to generate unique pallet code')
 }
 
-export const generateReportCode = async (spkId: string): Promise<string> => {
+export const generateReportCode = async (spkId: string, stage: ProcessStage): Promise<string> => {
     const date = new Date()
     const year = date.getFullYear().toString().slice(-2)
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
 
-    // Hitung berapa kali report sudah dibuat untuk spkID ini
-    const count = await prisma.report.count({
-        where: { spkId },
+    let stageCode: string
+    switch (stage) {
+        case 'PREPROCESS':
+            stageCode = 'PRE'
+            break
+        case 'PROCESS':
+            stageCode = 'PRO'
+            break
+        case 'FINISHING':
+            stageCode = 'FIN'
+            break
+        default:
+            stageCode = 'UNK' // Unknown stage
+    }
+
+    const count = await prisma.productionReport.count({
+        where: { 
+            spkPhase: {
+                spkId,
+                stage
+            }
+        },
     })
 
     const sequence = (count + 1).toString().padStart(2, '0')
+    
+    const spkData = await prisma.sPK.findUnique({
+        where: { id: spkId },
+        select: { code: true }
+    })
+    
+    const spkPrefix = spkData?.code?.split('/')[0] || 'XXXX'
 
-    return `RPT-${spkId}-${year}${month}${day}-${sequence}`
+    return `RPT-${spkPrefix}-${stageCode}-${year}${month}${day}-${sequence}`
 }
 
 export const generateItemCode = async (itemType: ItemType): Promise<string> => {
@@ -151,4 +177,44 @@ export const generateItemCode = async (itemType: ItemType): Promise<string> => {
 
     // Format the code with the sequence padded to 4 digits
     return `ITEM-${typeCode}${year}${month}-${sequence.toString().padStart(4, '0')}`
+}
+
+export const generateMachineCode = async (stage: ProcessStage): Promise<string> => {
+    let stageCode: string
+    switch (stage) {
+        case 'PREPROCESS':
+            stageCode = 'PRE'
+            break
+        case 'PROCESS':
+            stageCode = 'PRO'
+            break
+        case 'FINISHING':
+            stageCode = 'FIN'
+            break
+        default:
+            stageCode = 'UNK'
+    }
+    
+    const lastMachine = await prisma.machine.findFirst({
+        where: {
+            code: {
+                startsWith: `MC-${stageCode}`
+            }
+        },
+        orderBy: {
+            code: 'desc'
+        }
+    })
+
+    let sequence = 1
+    if (lastMachine) {
+        // Example code: MC-PRE001
+        const codePart = lastMachine.code.replace(`MC-${stageCode}`, '')
+        const lastSequence = parseInt(codePart)
+        if (!isNaN(lastSequence)) {
+            sequence = lastSequence + 1
+        }
+    }
+
+    return `MC-${stageCode}${sequence.toString().padStart(3, '0')}`
 }

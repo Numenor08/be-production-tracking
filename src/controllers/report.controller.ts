@@ -1,304 +1,240 @@
 import { Request, Response } from 'express'
 import { PrismaClient } from '../../generated/prisma'
+import {
+    ProcessStage,
+    ProductionReport,
+    ProductionReportTag,
+} from '../types/types'
 import { successResponse, errorResponse } from '../utils/api.utils'
+import { generateReportCode } from '../libs/generate'
 
 const prisma = new PrismaClient()
 
-export const getAllReports = async (
+export async function createProductionReport(
+    prisma: any,
+    spkId: string,
+    phaseId: string,
+    spkItemId: string,
+    stage: ProcessStage,
+    actualQuantity: number,
+    wasteQuantity: number,
+    storageUsed: number,
+    confirmedByUserId?: string,
+    notes?: string,
+    date: Date = new Date(),
+): Promise<ProductionReport> {
+    // 1. Get the SPK item to access target quantities
+    const spkItem = await prisma.sPK_Item.findUnique({
+        where: { id: spkItemId },
+        select: {
+            targetOutputQuantity: true,
+            targetWaste: true,
+        },
+    })
+
+    if (!spkItem) {
+        throw new Error(`SPK item with ID ${spkItemId} not found`)
+    }
+
+    // 2. Generate a unique code for the report
+    const reportCode = await generateReportCode(spkId, stage)
+
+    // 3. Calculate metrics for determining tags
+    const targetQuantity = spkItem.targetOutputQuantity
+    const totalActual = actualQuantity + wasteQuantity
+    const differenceToTarget = totalActual - targetQuantity
+
+    // 4. Determine appropriate tags based on conditions
+    const tags: ProductionReportTag[] = []
+
+    // Assign tags based on production metrics
+    if (storageUsed > 0) {
+        tags.push(ProductionReportTag.STORAGE_USED)
+    }
+
+    if (wasteQuantity > 0 && actualQuantity < targetQuantity) {
+        tags.push(ProductionReportTag.WASTE_USED)
+    }
+
+    const totalProduced = actualQuantity + wasteQuantity
+
+    if (totalProduced < targetQuantity) {
+        tags.push(ProductionReportTag.BELOW_TARGET)
+    } else if (actualQuantity > targetQuantity) {
+        tags.push(ProductionReportTag.ABOVE_TARGET)
+    } else if (
+        totalProduced === targetQuantity ||
+        actualQuantity === targetQuantity
+    ) {
+        tags.push(ProductionReportTag.FULL_PLANNED)
+    }
+
+    // 5. Create the production report
+    const productionReport = await prisma.productionReport.create({
+        data: {
+            code: reportCode,
+            stage,
+            spkPhase: {
+                connect: { id: phaseId },
+            },
+            spkItem: {
+                connect: { id: spkItemId },
+            },
+            confirmedByUser: confirmedByUserId
+                ? {
+                      connect: { id: confirmedByUserId },
+                  }
+                : undefined,
+            confirmedDate: date,
+            targetQuantity: targetQuantity,
+            actualQuantity,
+            wasteQuantity,
+            totalStorageUsed: storageUsed,
+            notes,
+            tags: JSON.stringify(tags), // Store as JSON string since Prisma expects this for Json fields
+            differenceToTarget,
+        },
+    })
+
+    return productionReport
+}
+
+export const getAllProductionReport = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
         const page = Number(req.query.page) || 1
-        const limit = Number(req.query.limit) || 10
+        const limit = Number(req.query.limit) || 30
         const search = req.query.search as string | undefined
+        const sortBy = req.query.sortBy as string | undefined
+        const sortOrder =
+            (req.query.sortOrder as 'asc' | 'desc' | undefined) || 'asc'
 
-        // Build where condition for filtering
         const where: any = {}
         if (search) {
-            where.OR = [
-                { id: { contains: search } },
-                { spk: { code: { contains: search } } },
-            ]
+            where.OR = [{ code: { contains: search, mode: 'insensitive' } }]
         }
 
-        const totalCount = await prisma.report.count({ where })
+        const orderBy: any = {}
+        if (sortBy) {
+            orderBy[sortBy] = sortOrder
+        } else {
+            orderBy.createdAt = 'desc'
+        }
+
+        // Get total count for pagination
+        const totalCount = await prisma.productionReport.count({ where })
+
+        // Calculate pagination values
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        const reports = await prisma.report.findMany({
+        const report = await prisma.productionReport.findMany({
             where,
+            orderBy,
             skip,
             take: limit,
             include: {
-                spk: {
+                spkPhase: {
                     select: {
                         id: true,
-                        code: true,
-                        salesOrder: {
+                        spk: {
                             select: {
-                                id: true,
                                 code: true,
-                                customer: {
-                                    select: {
-                                        name: true,
-                                    },
-                                },
                             },
                         },
                     },
                 },
-                reportItems: {
-                    include: {
-                        item: true,
+                spkItem: {
+                    select: {
+                        outputItem: {
+                            select: {
+                                code: true,
+                                name: true,
+                            },
+                        },
                     },
                 },
             },
-            orderBy: { createdAt: 'desc' },
         })
 
-        return res.json(
-            successResponse(reports, 'Reports retrieved successfully', {
+        return res.status(200).json(
+            successResponse(report, 'Production report fetched successfully', {
                 pagination: {
                     page,
                     limit,
-                    totalItems: totalCount,
+                    totalItem: totalCount,
                     totalPages,
                 },
             }),
         )
     } catch (error) {
-        console.error('Error in getAllReports:', error)
-        return res.status(500).json(errorResponse('Failed to retrieve reports'))
+        console.error('Error fetching production report:', error)
+        return res
+            .status(500)
+            .json(errorResponse('Failed to fetch production report', error))
     }
 }
 
-export const getReportById = async (
+export const getProductionReportById = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
         const { id } = req.params
 
-        const report = await prisma.report.findUnique({
+        const report = await prisma.productionReport.findUnique({
             where: { id },
             include: {
-                spk: {
+                spkPhase: {
                     include: {
-                        phases: {
+                        spk: {
                             select: {
-                                id: true,
-                                completionDate: true,
-                            }
-                        },
-                        salesOrder: {
-                            select: {
-                                id: true,
                                 code: true,
-                                customer: {
-                                    select: {
-                                        name: true,
-                                    },
-                                },
                             },
                         },
                     },
+                    select: {
+                        stage: true,
+                    },
                 },
-                reportItems: {
+                spkItem: {
                     include: {
-                        item: true,
-                        storage: true,
+                        outputItem: {
+                            select: {
+                                code: true,
+                                name: true,
+                            },
+                        },
                     },
                 },
             },
         })
 
         if (!report) {
-            return res.status(404).json(errorResponse('Report not found'))
+            return res
+                .status(404)
+                .json(errorResponse('Production report not found'))
         }
 
-        return res.json(
-            successResponse(report, 'Report retrieved successfully'),
-        )
+        return res
+            .status(200)
+            .json(
+                successResponse(
+                    report,
+                    'Production report fetched successfully',
+                ),
+            )
     } catch (error) {
-        console.error('Error in getReportById:', error)
-        return res.status(500).json(errorResponse('Failed to retrieve report'))
-    }
-}
-
-export const updateReport = async (
-    req: Request,
-    res: Response,
-): Promise<any> => {
-    try {
-        const { id } = req.params
-        const {
-            preprocessDetails,
-            processDetails,
-            finishingDetails,
-            preprocessCompletionDate,
-            processCompletionDate,
-            finishingCompletionDate,
-            preprocessSummary,
-            processSummary,
-            finishingSummary,
-        } = req.body
-
-        // Check if report exists
-        const existingReport = await prisma.report.findUnique({
-            where: { id },
-        })
-
-        if (!existingReport) {
-            return res.status(404).json(errorResponse('Report not found'))
-        }
-
-        // Update the report
-        const updated = await prisma.report.update({
-            where: { id },
-            data: {
-                preprocessDetails,
-                processDetails,
-                finishingDetails,
-                preprocessCompletionDate: preprocessCompletionDate
-                    ? new Date(preprocessCompletionDate)
-                    : undefined,
-                processCompletionDate: processCompletionDate
-                    ? new Date(processCompletionDate)
-                    : undefined,
-                finishingCompletionDate: finishingCompletionDate
-                    ? new Date(finishingCompletionDate)
-                    : undefined,
-            },
-        })
-
-        return res.json(successResponse(updated, 'Report updated successfully'))
-    } catch (error) {
-        console.error('Error in updateReport:', error)
-        return res.status(500).json(errorResponse('Failed to update report'))
-    }
-}
-
-export const updateReportItem = async (
-    req: Request,
-    res: Response,
-): Promise<any> => {
-    try {
-        const { itemId } = req.params
-        const { quantity, wasteQuantity, storageUsed, notes } = req.body
-
-        // Check if report item exists
-        const existingItem = await prisma.reportItem.findUnique({
-            where: { id: itemId },
-            include: {
-                storage: true,
-            },
-        })
-
-        if (!existingItem) {
-            return res.status(404).json(errorResponse('Report item not found'))
-        }
-
-        // Calculate quantity difference
-        const quantityDiff = quantity - existingItem.quantity
-        const wasteDiff = wasteQuantity - existingItem.wasteQuantity
-
-        await prisma.$transaction(async (tx) => {
-            // Update storage quantities if necessary
-            if (
-                existingItem.storageId &&
-                (quantityDiff !== 0 || wasteDiff !== 0)
-            ) {
-                await tx.storage.update({
-                    where: { id: existingItem.storageId },
-                    data: {
-                        stock: { increment: quantityDiff },
-                    },
-                })
-            }
-
-            // Update report item
-            await tx.reportItem.update({
-                where: { id: itemId },
-                data: {
-                    quantity,
-                    wasteQuantity,
-                    storageUsed: storageUsed || existingItem.storageUsed,
-                    notes,
-                },
-            })
-        })
-
-        const updatedItem = await prisma.reportItem.findUnique({
-            where: { id: itemId },
-            include: {
-                item: true,
-                storage: true,
-            },
-        })
-
-        return res.json(
-            successResponse(updatedItem, 'Report item updated successfully'),
-        )
-    } catch (error) {
-        console.error('Error in updateReportItem:', error)
+        console.error('Error fetching production report by ID:', error)
         return res
             .status(500)
-            .json(errorResponse('Failed to update report item'))
-    }
-}
-
-export const deleteReportItem = async (
-    req: Request,
-    res: Response,
-): Promise<any> => {
-    try {
-        const { itemId } = req.params
-
-        // Check if report item exists
-        const existingItem = await prisma.reportItem.findUnique({
-            where: { id: itemId },
-            include: {
-                storage: true,
-            },
-        })
-
-        if (!existingItem) {
-            return res.status(404).json(errorResponse('Report item not found'))
-        }
-
-        await prisma.$transaction(async (tx) => {
-            // Update storage quantities
-            if (existingItem.storageId) {
-                await tx.storage.update({
-                    where: { id: existingItem.storageId },
-                    data: {
-                        stock: { decrement: existingItem.quantity },
-                    },
-                })
-            }
-
-            // Delete report item
-            await tx.reportItem.delete({
-                where: { id: itemId },
-            })
-        })
-
-        return res.json(
-            successResponse(null, 'Report item deleted successfully'),
-        )
-    } catch (error) {
-        console.error('Error in deleteReportItem:', error)
-        return res
-            .status(500)
-            .json(errorResponse('Failed to delete report item'))
+            .json(errorResponse('Failed to fetch production report', error))
     }
 }
 
 export default {
-    getAllReports,
-    getReportById,
-    updateReport,
-    updateReportItem,
-    deleteReportItem,
+    getAllProductionReport,
+    getProductionReportById,
 }

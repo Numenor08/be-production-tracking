@@ -22,17 +22,6 @@ interface AuthRequest extends Request {
 // Register new user
 export const register = async (req: Request, res: Response): Promise<void> => {
     try {
-        // Check validation errors
-        const errors = validationResult(req)
-        if (!errors.isEmpty()) {
-            res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                errors: errors.array(),
-            })
-            return
-        }
-
         const { username, password, firstName, lastName, email, phone, role } = req.body
 
         // Check if user already exists
@@ -89,13 +78,6 @@ export const register = async (req: Request, res: Response): Promise<void> => {
 // Login user
 export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        // Check validation errors
-        const errors = validationResult(req)
-        if (!errors.isEmpty()) {
-            res.status(400).json(errorResponse('Validation failed', errors.array()))
-            return
-        }
-
         const { username, password } = req.body
 
         // Find user by username
@@ -104,10 +86,7 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
         })
 
         if (!user) {
-            res.status(401).json({
-                success: false,
-                message: 'Invalid credentials',
-            })
+            res.status(401).json(errorResponse('Invalid credentials'))
             return
         }
 
@@ -203,13 +182,6 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
 // Update user profile
 export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        // Check validation errors
-        const errors = validationResult(req)
-        if (!errors.isEmpty()) {
-            res.status(400).json(errorResponse('Validation failed', {error: errors.array()}))
-            return
-        }
-
         const userId = req.params.id || req.session.user!.id
         const { firstName, lastName, email, phone } = req.body
 
@@ -269,13 +241,6 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
 // Change password
 export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
-        // Check validation errors
-        const errors = validationResult(req)
-        if (!errors.isEmpty()) {
-            res.status(400).json(errorResponse('Validation failed', { errors: errors.array() }))
-            return
-        }
-
         const { currentPassword, newPassword } = req.body
         const userId = req.session.user!.id
 
@@ -342,17 +307,6 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
 // Update user by admin
 export const updateUserByAdmin = async (req: Request, res: Response): Promise<void> => {
     try {
-        // Check validation errors
-        const errors = validationResult(req)
-        if (!errors.isEmpty()) {
-            res.status(400).json({
-                success: false,
-                message: 'Validation failed',
-                errors: errors.array(),
-            })
-            return
-        }
-
         const { id } = req.params
         const { firstName, lastName, email, phone, isActive, role } = req.body
 

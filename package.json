@@ -8,6 +8,7 @@
     "build:watch": "tsc --watch",
     "dev": "nodemon --watch src --ext ts,json --exec ts-node src/server.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
+    "schema": "npx prisma db push && npx prisma generate",
     "schema:force": "npx prisma db push --force-reset && npx prisma generate",
     "seed:admin": "ts-node src/utils/seedAdmin.ts",
     "lint": "eslint"
@@ -23,7 +24,6 @@
     "@types/node-cron": "^3.0.11",
     "bcryptjs": "^3.0.2",
     "colors": "^1.4.0",
-    "connect-session-sequelize": "^8.0.0",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "express-session": "^1.18.1",
