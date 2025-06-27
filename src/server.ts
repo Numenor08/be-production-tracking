@@ -10,6 +10,7 @@ import spkRoutes from './routes/spk.route'
 import itemRoutes from './routes/item.route'
 import reportRoute from './routes/report.route'
 import palletRoute from './routes/pallet.route'
+import deliveryRoute from './routes/delivery.route'
 import customerRoute from './routes/customer.route'
 import userRoute from './routes/user.route'
 import notFoundHandler from './middlewares/notFound.middleware'
@@ -78,6 +79,7 @@ apiV1Router.use('/item', requireAuth, itemRoutes)
 apiV1Router.use('/spk', requireAuth, spkRoutes)
 apiV1Router.use('/report', requireAuth, reportRoute)
 apiV1Router.use('/pallet', requireAuth, palletRoute)
+apiV1Router.use('/delivery', requireAuth, deliveryRoute)
 
 app.use('/api/v1', apiV1Router)
 

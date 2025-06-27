@@ -218,3 +218,41 @@ export const generateMachineCode = async (stage: ProcessStage): Promise<string> 
 
     return `MC-${stageCode}${sequence.toString().padStart(3, '0')}`
 }
+
+export const generateDeliveryCode = async (): Promise<string> => {
+    const date = new Date()
+    const year = date.getFullYear().toString().slice(-2)
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+
+    // Find the last delivery order for today
+    const todayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    const todayEnd = new Date(todayStart)
+    todayEnd.setDate(todayEnd.getDate() + 1)
+
+    const lastDelivery = await prisma.deliveryOrder.findFirst({
+        where: {
+            createdAt: {
+                gte: todayStart,
+                lt: todayEnd
+            }
+        },
+        orderBy: {
+            code: 'desc'
+        }
+    })
+
+    let sequence = 1
+    if (lastDelivery?.code) {
+        // Extract sequence from code format: DO-YYMMDD-XXX
+        const parts = lastDelivery.code.split('-')
+        if (parts.length === 3) {
+            const lastSequence = parseInt(parts[2])
+            if (!isNaN(lastSequence)) {
+                sequence = lastSequence + 1
+            }
+        }
+    }
+
+    return `SJ-${year}${month}${day}-${sequence.toString().padStart(3, '0')}`
+}

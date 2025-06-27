@@ -6,8 +6,10 @@ import {
     createPalletValidation,
     updatePalletValidation,
     addPalletItemValidation,
-    updatePalletItemValidation,
     palletQueryValidation,
+    createPalletsForSalesOrderValidation,
+    fillPalletAutomaticallyValidation,
+    checkStockAvailabilityValidation,
 } from '../validations/pallet.validation'
 
 const router = express.Router()
@@ -36,21 +38,28 @@ router.post(
     palletController.markAsShipped,
 )
 
-// Pallet item routes
+// Pallet item route (manual add - kept for specific use cases)
 router.post(
     '/:palletId/items',
     validate([...palletIdValidation, ...addPalletItemValidation]),
     palletController.addPalletItem,
 )
-router.put(
-    '/:palletId/items/:itemId',
-    validate([...palletIdValidation, ...updatePalletItemValidation]),
-    palletController.updatePalletItem,
+
+// Improved pallet management routes
+router.post(
+    '/sales-order/create-pallets',
+    validate(createPalletsForSalesOrderValidation),
+    palletController.createPalletsForSalesOrder,
 )
-router.delete(
-    '/:palletId/items/:itemId',
-    validate(palletIdValidation),
-    palletController.removePalletItem,
+router.post(
+    '/:palletId/fill-automatically',
+    validate(fillPalletAutomaticallyValidation),
+    palletController.fillPalletAutomatically,
+)
+router.post(
+    '/sales-order/stock-availability',
+    validate(checkStockAvailabilityValidation),
+    palletController.checkStockAvailabilityForSalesOrder,
 )
 
 export default router

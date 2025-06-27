@@ -1,0 +1,1396 @@
+{
+  "info": {
+    "name": "Production Tracking System - Complete API",
+    "description": "Complete collection for Production Tracking System API testing",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "version": {
+      "major": 1,
+      "minor": 0,
+      "patch": 0
+    }
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:4501/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "session_cookie",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "customer_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "item_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "machine_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "sales_order_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "spk_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "storage_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "pallet_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "delivery_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "report_id",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Authentication & User Management",
+      "item": [
+        {
+          "name": "1.1. Register User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"john_doe\",\n  \"password\": \"password123\",\n  \"firstName\": \"John\",\n  \"lastName\": \"Doe\",\n  \"email\": \"john@example.com\",\n  \"phone\": \"+62812345678\",\n  \"role\": \"OPERATOR\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/register",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "1.2. Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(200)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.user) {",
+                  "        pm.collectionVariables.set('user_id', response.data.user.id);",
+                  "    }",
+                  "    // Extract session cookie",
+                  "    const cookies = pm.response.headers.get('Set-Cookie');",
+                  "    if (cookies) {",
+                  "        const sessionMatch = cookies.match(/sessionId=([^;]+)/);",
+                  "        if (sessionMatch) {",
+                  "            pm.collectionVariables.set('session_cookie', sessionMatch[1]);",
+                  "        }",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"john_doe\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "1.3. Get Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/profile",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "profile"]
+            }
+          }
+        },
+        {
+          "name": "1.4. Get All Users (Admin)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/users?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "users"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "1.5. Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/auth/logout",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Customer Management",
+      "item": [
+        {
+          "name": "2.1. Get All Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/customer?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["customer"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "search",
+                  "value": "PT",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "2.2. Create Customer",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('customer_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PT. Example Company\",\n  \"address\": \"Jl. Sudirman No. 123\",\n  \"phone\": \"+62211234567\",\n  \"email\": \"contact@example.com\",\n  \"contactPerson\": \"Jane Doe\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customer",
+              "host": ["{{base_url}}"],
+              "path": ["customer"]
+            }
+          }
+        },
+        {
+          "name": "2.3. Get Customer by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/customer/{{customer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["customer", "{{customer_id}}"]
+            }
+          }
+        },
+        {
+          "name": "2.4. Update Customer",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PT. Example Company Updated\",\n  \"phone\": \"+62211234568\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customer/{{customer_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["customer", "{{customer_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. Item Management",
+      "item": [
+        {
+          "name": "3.1. Get All Items",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/item?page=1&limit=10&type=PRODUCT",
+              "host": ["{{base_url}}"],
+              "path": ["item"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "type",
+                  "value": "PRODUCT"
+                },
+                {
+                  "key": "search",
+                  "value": "Das",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "3.2. Create Item",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('item_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"ITM-001\",\n  \"name\": \"Das Kapital\",\n  \"type\": \"PRODUCT\",\n  \"price\": 150000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/item",
+              "host": ["{{base_url}}"],
+              "path": ["item"]
+            }
+          }
+        },
+        {
+          "name": "3.3. Get Item by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/item/{{item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["item", "{{item_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. Machine Management",
+      "item": [
+        {
+          "name": "4.1. Get All Machines",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/machine?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["machine"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "type",
+                  "value": "PROCESS",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4.2. Create Machine",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('machine_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"MCH-001\",\n  \"name\": \"Printing Press Alpha\",\n  \"details\": \"High-speed printing machine\",\n  \"type\": \"PROCESS\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/machine",
+              "host": ["{{base_url}}"],
+              "path": ["machine"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. Sales Order Management",
+      "item": [
+        {
+          "name": "5.1. Get All Sales Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sales-order?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["sales-order"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "COMPLETED",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "5.2. Create Sales Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('sales_order_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SO-2025-001\",\n  \"customerId\": \"{{customer_id}}\",\n  \"totalPrice\": 33000000,\n  \"completionDate\": \"2025-07-15T00:00:00.000Z\",\n  \"deliveryDate\": \"2025-07-20T00:00:00.000Z\",\n  \"maxQuantityPerPallet\": 50,\n  \"items\": [\n    {\n      \"itemId\": \"{{item_id}}\",\n      \"targetQuantity\": 220\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sales-order",
+              "host": ["{{base_url}}"],
+              "path": ["sales-order"]
+            }
+          }
+        },
+        {
+          "name": "5.3. Get Sales Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sales-order/{{sales_order_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["sales-order", "{{sales_order_id}}"]
+            }
+          }
+        },
+        {
+          "name": "5.4. Get Sales Order Progress",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sales-order/{{sales_order_id}}/progress",
+              "host": ["{{base_url}}"],
+              "path": ["sales-order", "{{sales_order_id}}", "progress"]
+            }
+          }
+        },
+        {
+          "name": "5.5. Complete Sales Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/sales-order/{{sales_order_id}}/complete",
+              "host": ["{{base_url}}"],
+              "path": ["sales-order", "{{sales_order_id}}", "complete"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. SPK Management",
+      "item": [
+        {
+          "name": "6.1. Get All SPK",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/spk?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["spk"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "salesOrderId",
+                  "value": "{{sales_order_id}}",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "6.2. Create SPK",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('spk_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SPK-2025-001\",\n  \"salesOrderId\": \"{{sales_order_id}}\",\n  \"salesOrderItemId\": \"sales_order_item_id\",\n  \"targetQuantity\": 110,\n  \"preprocessDeadline\": \"2025-07-05T00:00:00.000Z\",\n  \"processDeadline\": \"2025-07-10T00:00:00.000Z\",\n  \"finishingDeadline\": \"2025-07-15T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/spk",
+              "host": ["{{base_url}}"],
+              "path": ["spk"]
+            }
+          }
+        },
+        {
+          "name": "6.3. Get SPK by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/spk/{{spk_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["spk", "{{spk_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. Storage Management",
+      "item": [
+        {
+          "name": "7.1. Get All Storage",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/storage?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["storage"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "itemType",
+                  "value": "PRODUCT",
+                  "disabled": true
+                },
+                {
+                  "key": "stage",
+                  "value": "FINISHING",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "7.2. Create Storage Entry",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('storage_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"spkId\": \"{{spk_id}}\",\n  \"itemId\": \"{{item_id}}\",\n  \"spkStage\": \"FINISHING\",\n  \"stock\": 150\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/storage",
+              "host": ["{{base_url}}"],
+              "path": ["storage"]
+            }
+          }
+        },
+        {
+          "name": "7.3. Get Storage by Item",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/storage/item/{{item_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["storage", "item", "{{item_id}}"]
+            }
+          }
+        },
+        {
+          "name": "7.4. Reduce Stock by Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"{{item_id}}\",\n  \"quantity\": 25,\n  \"prioritySpkId\": \"{{spk_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/storage/reduce-stock",
+              "host": ["{{base_url}}"],
+              "path": ["storage", "reduce-stock"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. Pallet Management",
+      "item": [
+        {
+          "name": "8.1. Get All Pallets",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pallet?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["pallet"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "READY",
+                  "disabled": true
+                },
+                {
+                  "key": "salesOrderId",
+                  "value": "{{sales_order_id}}",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "8.2. Check Stock Availability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salesOrderId\": \"{{sales_order_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pallet/sales-order/stock-availability",
+              "host": ["{{base_url}}"],
+              "path": ["pallet", "sales-order", "stock-availability"]
+            }
+          }
+        },
+        {
+          "name": "8.3. Create Pallets for Sales Order (Auto)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salesOrderId\": \"{{sales_order_id}}\",\n  \"autoFill\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pallet/sales-order/create-pallets",
+              "host": ["{{base_url}}"],
+              "path": ["pallet", "sales-order", "create-pallets"]
+            }
+          }
+        },
+        {
+          "name": "8.4. Create Single Pallet",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('pallet_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salesOrderId\": \"{{sales_order_id}}\",\n  \"itemId\": \"{{item_id}}\",\n  \"maxQuantity\": 50\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pallet",
+              "host": ["{{base_url}}"],
+              "path": ["pallet"]
+            }
+          }
+        },
+        {
+          "name": "8.5. Fill Pallet Automatically",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetQuantity\": 40\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pallet/{{pallet_id}}/fill-automatically",
+              "host": ["{{base_url}}"],
+              "path": ["pallet", "{{pallet_id}}", "fill-automatically"]
+            }
+          }
+        },
+        {
+          "name": "8.6. Mark Pallet as Shipped",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/pallet/{{pallet_id}}/ship",
+              "host": ["{{base_url}}"],
+              "path": ["pallet", "{{pallet_id}}", "ship"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. Delivery Management",
+      "item": [
+        {
+          "name": "9.1. Get All Delivery Orders",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/delivery?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["delivery"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "status",
+                  "value": "PENDING",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "9.2. Create Delivery Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('delivery_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salesOrderId\": \"{{sales_order_id}}\",\n  \"deliveryDate\": \"2025-07-20T00:00:00.000Z\",\n  \"notes\": \"Handle with care\",\n  \"palletIds\": [\"{{pallet_id}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/delivery",
+              "host": ["{{base_url}}"],
+              "path": ["delivery"]
+            }
+          }
+        },
+        {
+          "name": "9.3. Mark as In Transit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/delivery/{{delivery_id}}/in-transit",
+              "host": ["{{base_url}}"],
+              "path": ["delivery", "{{delivery_id}}", "in-transit"]
+            }
+          }
+        },
+        {
+          "name": "9.4. Mark as Delivered",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/delivery/{{delivery_id}}/delivered",
+              "host": ["{{base_url}}"],
+              "path": ["delivery", "{{delivery_id}}", "delivered"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Report Management",
+      "item": [
+        {
+          "name": "10.1. Get All Reports",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/report?page=1&limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["report"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "10"
+                },
+                {
+                  "key": "stage",
+                  "value": "FINISHING",
+                  "disabled": true
+                },
+                {
+                  "key": "spkId",
+                  "value": "{{spk_id}}",
+                  "disabled": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "10.2. Create Production Report",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.to.have.status(201)) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.id) {",
+                  "        pm.collectionVariables.set('report_id', response.data.id);",
+                  "    }",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"spkPhaseId\": \"spk_phase_id\",\n  \"spkItemId\": \"spk_item_id\",\n  \"targetQuantity\": 110,\n  \"actualQuantity\": 108,\n  \"wasteQuantity\": 2,\n  \"totalStorageUsed\": 110,\n  \"notes\": \"Minor waste due to quality issues\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/report",
+              "host": ["{{base_url}}"],
+              "path": ["report"]
+            }
+          }
+        },
+        {
+          "name": "10.3. Get Report by ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/report/{{report_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["report", "{{report_id}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Complete Workflow Test",
+      "item": [
+        {
+          "name": "Step 1: Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Login successful', function () {",
+                  "    pm.response.to.have.status(200);",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/auth/login",
+              "host": ["{{base_url}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Step 2: Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"PT. Test Company\",\n  \"address\": \"Jl. Test No. 123\",\n  \"phone\": \"+62211234567\",\n  \"email\": \"test@company.com\",\n  \"contactPerson\": \"Test Person\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/customer",
+              "host": ["{{base_url}}"],
+              "path": ["customer"]
+            }
+          }
+        },
+        {
+          "name": "Step 3: Create Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"TEST-BOOK-001\",\n  \"name\": \"Test Book\",\n  \"type\": \"PRODUCT\",\n  \"price\": 100000\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/item",
+              "host": ["{{base_url}}"],
+              "path": ["item"]
+            }
+          }
+        },
+        {
+          "name": "Step 4: Create Sales Order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"SO-TEST-001\",\n  \"customerId\": \"{{customer_id}}\",\n  \"totalPrice\": 10000000,\n  \"completionDate\": \"2025-08-15T00:00:00.000Z\",\n  \"deliveryDate\": \"2025-08-20T00:00:00.000Z\",\n  \"maxQuantityPerPallet\": 50,\n  \"items\": [\n    {\n      \"itemId\": \"{{item_id}}\",\n      \"targetQuantity\": 100\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/sales-order",
+              "host": ["{{base_url}}"],
+              "path": ["sales-order"]
+            }
+          }
+        },
+        {
+          "name": "Step 5: Check Stock Availability",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salesOrderId\": \"{{sales_order_id}}\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pallet/sales-order/stock-availability",
+              "host": ["{{base_url}}"],
+              "path": ["pallet", "sales-order", "stock-availability"]
+            }
+          }
+        },
+        {
+          "name": "Step 6: Create Pallets with Auto-fill",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Cookie",
+                "value": "sessionId={{session_cookie}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"salesOrderId\": \"{{sales_order_id}}\",\n  \"autoFill\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/pallet/sales-order/create-pallets",
+              "host": ["{{base_url}}"],
+              "path": ["pallet", "sales-order", "create-pallets"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -106,9 +106,10 @@ model SalesOrder {
   completionDate DateTime
   deliveryDate   DateTime?
   status         OrderStatus      @default(IDLE)
+  maxQuantityPerPallet Int @default(50) // Maximum quantity per pallet for this sales order
 
   customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -257,6 +258,7 @@ model Item {
   storageItems Storage[]
   inputItemRelations SPK_InputItem[] 
   outputItems  SPK_Item[]   @relation("OutputItem")
+  pallets      Pallet[]     // Pallets that contain this item
 }
 
 model SalesOrderItem {
@@ -265,8 +267,8 @@ model SalesOrderItem {
   salesOrder   SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
   salesOrderId String
 
-  item   Item?   @relation(fields: [itemId], references: [id], onDelete: SetNull)
-  itemId String?
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId String
 
   targetQuantity    Int
   remainingQuantity Int
@@ -310,10 +312,17 @@ model MachineHistory {
 model Pallet {
   id           String       @id @default(cuid())
   code         String       @unique
-  status       PalletStatus @default(READY)
+  status       PalletStatus @default(NOT_READY)
   qrCodeData   String?
+  currentQuantity Int @default(0) // Current quantity in this pallet
+  maxQuantity  Int // Maximum quantity this pallet can hold (copied from sales order)
+  
   salesOrderId String
   salesOrder   SalesOrder  @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  
+  itemId       String // The specific item type this pallet contains
+  item         Item @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  
   createdAt    DateTime     @default(now())
   updatedAt    DateTime     @updatedAt
 

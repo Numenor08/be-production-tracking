@@ -92,6 +92,7 @@ export interface SalesOrder {
     completionDate: Date;
     deliveryDate?: Date | null;
     status: OrderStatus;
+    maxQuantityPerPallet: number; // New field
     customerId: string;
     customer?: Customer;
     createdAt: Date;
@@ -99,7 +100,7 @@ export interface SalesOrder {
     items?: SalesOrderItem[];
     spk?: SPK[];
     pallets?: Pallet[];
-    deliveryOrders?: DeliveryOrder[];
+    deliveryOrders?: DeliveryOrder;
 }
 
 export interface SPK {
@@ -198,6 +199,7 @@ export interface Item {
     storageItems?: Storage[];
     inputItemRelations?: SPK_InputItem[];
     outputItems?: SPK_Item[];
+    pallets?: Pallet[]; // New field
 }
 
 export interface SalesOrderItem {
@@ -242,8 +244,12 @@ export interface Pallet {
     code: string;
     status: PalletStatus;
     qrCodeData?: string | null;
+    currentQuantity: number; // New field
+    maxQuantity: number; // New field
     salesOrderId: string;
     salesOrder?: SalesOrder;
+    itemId: string; // New field
+    item?: Item; // New field
     deliveryOrderId?: string | null;
     deliveryOrder?: DeliveryOrder | null;
     createdAt: Date;

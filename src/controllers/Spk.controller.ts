@@ -13,6 +13,7 @@ import {
 } from '../libs/generate'
 import { createProductionReport } from './report.controller'
 import { reduceStockFromStorage, addStockToStorage } from './storage.controller'
+import { get } from 'http'
 
 const prisma = new PrismaClient()
 
@@ -726,12 +727,12 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
     try {
         const { id } = req.params
         const {
-            mesin_preprocess,
-            mesin_process,
-            mesin_finishing,
-            tanggal_deadline_preprocess,
-            tanggal_deadline_process,
-            tanggal_deadline_finishing,
+            preprocessMachineId,
+            processMachineId,
+            finishingMachineId,
+            preprocessDeadline,
+            processDeadline,
+            finishingDeadline,
             status,
         } = req.body
 
@@ -751,9 +752,9 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
         }
 
         // Check if machines exist
-        if (mesin_preprocess) {
+        if (preprocessMachineId) {
             const preprocessMachine = await prisma.machine.findUnique({
-                where: { id: mesin_preprocess },
+                where: { id: preprocessMachineId },
             })
             if (!preprocessMachine) {
                 return res
@@ -771,9 +772,9 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
             }
         }
 
-        if (mesin_process) {
+        if (processMachineId) {
             const processMachine = await prisma.machine.findUnique({
-                where: { id: mesin_process },
+                where: { id: processMachineId },
             })
             if (!processMachine) {
                 return res
@@ -791,9 +792,9 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
             }
         }
 
-        if (mesin_finishing) {
+        if (finishingMachineId) {
             const finishingMachine = await prisma.machine.findUnique({
-                where: { id: mesin_finishing },
+                where: { id: finishingMachineId },
             })
             if (!finishingMachine) {
                 return res
@@ -816,19 +817,19 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
             // Update SPK
             const updateData: any = {}
 
-            if (tanggal_deadline_preprocess) {
+            if (preprocessDeadline) {
                 updateData.preprocessDeadline = new Date(
-                    tanggal_deadline_preprocess,
+                    preprocessDeadline,
                 )
             }
 
-            if (tanggal_deadline_process) {
-                updateData.processDeadline = new Date(tanggal_deadline_process)
+            if (processDeadline) {
+                updateData.processDeadline = new Date(processDeadline)
             }
 
-            if (tanggal_deadline_finishing) {
+            if (finishingDeadline) {
                 updateData.finishingDeadline = new Date(
-                    tanggal_deadline_finishing,
+                    finishingDeadline,
                 )
             }
 
@@ -838,17 +839,17 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
 
             // Handle machine changes
             if (
-                mesin_preprocess &&
-                mesin_preprocess !== existingSPK.preprocessMachineId
+                preprocessMachineId &&
+                preprocessMachineId !== existingSPK.preprocessMachineId
             ) {
                 updateData.preprocessMachine = {
-                    connect: { id: mesin_preprocess },
+                    connect: { id: preprocessMachineId },
                 }
 
                 // Add history record for new machine
                 await tx.machineHistory.create({
                     data: {
-                        machine: { connect: { id: mesin_preprocess } },
+                        machine: { connect: { id: preprocessMachineId } },
                         spk: { connect: { id } },
                         details: `Assigned to SPK ${existingSPK.code} for preprocess stage`,
                     },
@@ -856,15 +857,15 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
             }
 
             if (
-                mesin_process &&
-                mesin_process !== existingSPK.processMachineId
+                processMachineId &&
+                processMachineId !== existingSPK.processMachineId
             ) {
-                updateData.processMachine = { connect: { id: mesin_process } }
+                updateData.processMachine = { connect: { id: processMachineId } }
 
                 // Add history record for new machine
                 await tx.machineHistory.create({
                     data: {
-                        machine: { connect: { id: mesin_process } },
+                        machine: { connect: { id: processMachineId } },
                         spk: { connect: { id } },
                         details: `Assigned to SPK ${existingSPK.code} for process stage`,
                     },
@@ -872,17 +873,17 @@ export const updateSPK = async (req: Request, res: Response): Promise<any> => {
             }
 
             if (
-                mesin_finishing &&
-                mesin_finishing !== existingSPK.finishingMachineId
+                finishingMachineId &&
+                finishingMachineId !== existingSPK.finishingMachineId
             ) {
                 updateData.finishingMachine = {
-                    connect: { id: mesin_finishing },
+                    connect: { id: finishingMachineId },
                 }
 
                 // Add history record for new machine
                 await tx.machineHistory.create({
                     data: {
-                        machine: { connect: { id: mesin_finishing } },
+                        machine: { connect: { id: finishingMachineId } },
                         spk: { connect: { id } },
                         details: `Assigned to SPK ${existingSPK.code} for finishing stage`,
                     },
@@ -1785,8 +1786,8 @@ function calcPhaseProgress(phases: { status: PhaseStatus }[]): number {
 
 export default {
     getAllSPK,
-    getSPKById,
     createSPK,
+    getSPKById,
     updateSPK,
     deleteSPK,
     getSPKPhaseByStage,
@@ -1794,4 +1795,5 @@ export default {
     completeSPKPhase,
     deleteSPKPhase,
     createSPKItem,
+    calcPhaseProgress,
 }

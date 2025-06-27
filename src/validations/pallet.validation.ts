@@ -7,9 +7,15 @@ export const palletIdValidation = [
 
 export const createPalletValidation = [
     body('salesOrderId')
-        .optional()
         .isString()
-        .withMessage('Sales order ID must be a string'),
+        .withMessage('Sales order ID is required'),
+    body('itemId')
+        .isString()
+        .withMessage('Item ID is required'),
+    body('maxQuantity')
+        .optional()
+        .isInt({ min: 1 })
+        .withMessage('Max quantity must be a positive integer'),
 ]
 
 export const updatePalletValidation = [
@@ -24,15 +30,7 @@ export const updatePalletValidation = [
 ]
 
 export const addPalletItemValidation = [
-    body('storageId').isString().withMessage('Storage ID is required'),
-    body('spkId').isString().withMessage('SPK ID is required'),
-    body('quantity')
-        .isInt({ min: 1 })
-        .withMessage('Quantity must be a positive integer'),
-]
-
-export const updatePalletItemValidation = [
-    param('itemId').isString().withMessage('Item ID is required'),
+    body('itemId').isString().withMessage('Item ID is required'),
     body('quantity')
         .isInt({ min: 1 })
         .withMessage('Quantity must be a positive integer'),
@@ -56,4 +54,28 @@ export const palletQueryValidation = [
         .optional()
         .isString()
         .withMessage('Sales order ID must be a string'),
+]
+
+export const createPalletsForSalesOrderValidation = [
+    body('salesOrderId')
+        .isString()
+        .withMessage('Sales order ID is required'),
+    body('autoFill')
+        .optional()
+        .isBoolean()
+        .withMessage('Auto fill must be a boolean'),
+]
+
+export const fillPalletAutomaticallyValidation = [
+    param('palletId').isString().withMessage('Pallet ID is required'),
+    body('targetQuantity')
+        .optional()
+        .isInt({ min: 1 })
+        .withMessage('Target quantity must be a positive integer'),
+]
+
+export const checkStockAvailabilityValidation = [
+    body('salesOrderId')
+        .isString()
+        .withMessage('Sales order ID is required'),
 ]
