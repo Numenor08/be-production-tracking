@@ -10,6 +10,10 @@ export const createMachineValidation = [
     body('details')
         .notEmpty()
         .withMessage('Machine details are required')
+        .isString()
+        .withMessage('Machine details must be a string')
+        .isLength({ max: 255 })
+        .withMessage('Machine details must not exceed 255 characters')
         .trim(),
     body('type')
         .notEmpty()
@@ -28,6 +32,10 @@ export const updateMachineValidation = [
         .optional()
         .notEmpty()
         .withMessage('Machine details cannot be empty')
+        .isString()
+        .withMessage('Machine details must be a string')
+        .isLength({ max: 255 })
+        .withMessage('Machine details must not exceed 255 characters')
         .trim(),
     body('type')
         .optional()

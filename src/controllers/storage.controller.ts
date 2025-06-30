@@ -158,13 +158,11 @@ export const createStorage = async (
         }
 
         // Check if storage already exists
-        const existingStorage = await prisma.storage.findUnique({
+        const existingStorage = await prisma.storage.findFirst({
             where: {
-                spkId_itemId_spkStage: {
-                    spkId,
-                    itemId,
-                    spkStage,
-                },
+                spkId,
+                itemId,
+                spkStage,
             },
         })
 
@@ -462,7 +460,7 @@ export const getStorageBySPK = async (
 
         // Group by production stage
         const groupedByStage = storageItems.reduce((acc: any, item) => {
-            const stageName = item.spkStage
+            const stageName = item.spkStage ?? 'UNKNOWN_STAGE'
             if (!acc[stageName]) {
                 acc[stageName] = []
             }
@@ -537,14 +535,14 @@ export const addStockByItem = async (
     res: Response
 ): Promise<any> => {
     try {
-        const { itemId, spkId, quantity, stage } = req.body
+        const { itemId, spkId = '', quantity, stage = undefined } = req.body
         
-        if (!itemId || !spkId || !quantity || quantity <= 0 || !stage) {
+       if (!itemId || !quantity || quantity <= 0) {
             return res.status(400).json(errorResponse(
-                'Valid itemId, spkId, stage, and positive quantity are required'
+                'Valid itemId and positive quantity are required'
             ))
         }
-
+``
         // Use the utility function
         const result = await addStockToStorage(prisma, itemId, spkId, quantity, stage as ProcessStage)
 
@@ -720,16 +718,16 @@ export const reduceStockFromStorage = async (
 export const addStockToStorage = async (
     prismaInstance: PrismaClient,
     itemId: string,
-    spkId: string,
+    spkId: string = '',
     quantity: number,
-    stage: ProcessStage
+    stage?: ProcessStage
 ): Promise<{success: boolean, message: string, storage?: any}> => {
     try {
-        if (!itemId || !spkId || !quantity || quantity <= 0) {
-            return {success: false, message: 'Valid itemId, spkId, and positive quantity are required'}
+        if (!itemId || !quantity || quantity <= 0) {
+            return {success: false, message: 'Valid itemId and positive quantity are required'}
         }
 
-        // Verify item and SPK exist
+        // Verify item exists
         const item = await prismaInstance.item.findUnique({
             where: { id: itemId }
         });
@@ -738,23 +736,22 @@ export const addStockToStorage = async (
             return {success: false, message: `Item with ID ${itemId} not found`};
         }
 
-        const spk = await prismaInstance.sPK.findUnique({
-            where: { id: spkId }
-        });
-
-        if (!spk) {
-            return {success: false, message: `SPK with ID ${spkId} not found`};
-        }
-
         // Run in a transaction
         const result = await prismaInstance.$transaction(async (tx) => {
+            // Build where clause dynamically
+            const whereClause: any = {
+                itemId,
+            };
+            if (spkId) {
+                if (stage !== undefined) {
+                    whereClause.spkStage = stage;
+                }
+                whereClause.spkId = spkId;
+            }
+
             // Check if storage entry already exists
             const existingStorage = await tx.storage.findFirst({
-                where: {
-                    spkId,
-                    itemId,
-                    spkStage: stage
-                }
+                where: whereClause
             });
 
             if (existingStorage) {
@@ -769,13 +766,15 @@ export const addStockToStorage = async (
                 });
             } else {
                 // Create new storage entry
+                const data: any = {
+                    itemId,
+                    stock: quantity
+                };
+                if (stage !== undefined) {
+                    data.spkStage = stage;
+                }
                 return await tx.storage.create({
-                    data: {
-                        spkId,
-                        itemId,
-                        spkStage: stage,
-                        stock: quantity
-                    },
+                    data,
                     include: {
                         item: { select: { name: true } },
                         spk: { select: { code: true } }

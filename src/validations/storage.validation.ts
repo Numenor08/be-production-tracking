@@ -80,12 +80,14 @@ export const addStockValidation = [
         .isString()
         .withMessage('Item ID is required'),
     body('spkId')
+        .optional()
         .isString()
         .withMessage('SPK ID is required'),
     body('quantity')
         .isInt({ min: 1 })
         .withMessage('Quantity must be a positive integer'),
     body('stage')
+        .optional()
         .isIn(Object.values(ProcessStage))
         .withMessage('Valid production stage is required'),
 ]

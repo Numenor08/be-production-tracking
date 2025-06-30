@@ -90,7 +90,8 @@ export const getAllItems = async (
                             spkCode: string
                             stock: number
                         }
-                    >
+                        >
+                    storageCount: number
                 }
             > = {}
 
@@ -104,6 +105,7 @@ export const getAllItems = async (
                     stockByItemId[itemId] = {
                         totalStock: 0,
                         spkSources: {},
+                        storageCount: 0,
                     }
                 }
 
@@ -120,8 +122,8 @@ export const getAllItems = async (
                     }
                 }
 
-                stockByItemId[itemId].spkSources[spkId].stock +=
-                    storageItem.stock
+                stockByItemId[itemId].spkSources[spkId].stock += storageItem.stock
+                stockByItemId[itemId].storageCount += 1
             }
 
             // Enhance items with stock information
@@ -129,12 +131,14 @@ export const getAllItems = async (
                 const stockInfo = stockByItemId[item.id] || {
                     totalStock: 0,
                     spkSources: {},
+                    storageCount: 0,
                 }
 
                 return {
                     ...item,
                     totalStock: stockInfo.totalStock,
                     stockSources: Object.values(stockInfo.spkSources),
+                    storageCount: stockInfo.storageCount,
                     storageItems: undefined, // Remove raw storage items to keep response clean
                 }
             })

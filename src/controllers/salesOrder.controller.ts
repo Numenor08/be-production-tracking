@@ -60,24 +60,15 @@ export const getAllSalesOrders = async (
                         item: {
                             select: {
                                 id: true,
+                                code: true,
                                 name: true,
-                                type: true,
-                                price: true,
                             },
                         },
-                    },
-                },
-                spk: {
-                    select: {
-                        id: true,
-                        code: true,
                     },
                 },
                 pallets: {
                     select: {
                         id: true,
-                        code: true,
-                        status: true,
                     },
                 },
                 customer: {
@@ -93,7 +84,6 @@ export const getAllSalesOrders = async (
         const formattedOrders = salesOrders.map((order) => ({
             ...order,
             itemsCount: order.items.length,
-            spkCount: order.spk.length,
             palletCount: order.pallets.length,
             isComplete: order.status === 'COMPLETED',
         }))
@@ -135,6 +125,7 @@ export const getSalesOrderById = async (
                         item: {
                             select: {
                                 id: true,
+                                code: true,
                                 name: true,
                                 type: true,
                                 price: true
@@ -146,6 +137,7 @@ export const getSalesOrderById = async (
                     select: {
                         id: true,
                         code: true,
+                        targetQuantity: true,
                     }
                 },
                 pallets: {

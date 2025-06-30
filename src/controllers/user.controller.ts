@@ -1,7 +1,6 @@
 import { Request, Response } from 'express'
 import { PrismaClient, UserRole } from '../../generated/prisma'
 import bcrypt from 'bcryptjs'
-import { validationResult } from 'express-validator'
 import { errorResponse, successResponse } from '../utils/api.utils'
 
 const prisma = new PrismaClient()
@@ -22,7 +21,7 @@ interface AuthRequest extends Request {
 // Register new user
 export const register = async (req: Request, res: Response): Promise<void> => {
     try {
-        const { username, password, firstName, lastName, email, phone, role } = req.body
+        const { username, password, confirmPassword, firstName, lastName, email, phone, role } = req.body
 
         // Check if user already exists
         const existingUser = await prisma.user.findFirst({

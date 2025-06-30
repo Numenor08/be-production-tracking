@@ -13,7 +13,6 @@ import {
 } from '../libs/generate'
 import { createProductionReport } from './report.controller'
 import { reduceStockFromStorage, addStockToStorage } from './storage.controller'
-import { get } from 'http'
 
 const prisma = new PrismaClient()
 
@@ -299,13 +298,13 @@ export const getSPKById = async (req: Request, res: Response): Promise<any> => {
                     },
                 },
                 preprocessMachine: {
-                    select: { id: true, name: true, type: true },
+                    select: { id: true, name: true, type: true, details: true },
                 },
                 processMachine: {
-                    select: { id: true, name: true, type: true },
+                    select: { id: true, name: true, type: true, details: true },
                 },
                 finishingMachine: {
-                    select: { id: true, name: true, type: true },
+                    select: { id: true, name: true, type: true, details: true },
                 },
             },
         })

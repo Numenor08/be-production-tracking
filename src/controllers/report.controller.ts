@@ -195,9 +195,6 @@ export const getProductionReportById = async (
                             },
                         },
                     },
-                    select: {
-                        stage: true,
-                    },
                 },
                 spkItem: {
                     include: {

@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "build:watch": "tsc --watch",
+    "start": "clear && node dist/server.js",
     "dev": "nodemon --watch src --ext ts,json --exec ts-node src/server.ts",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "schema": "npx prisma db push && npx prisma generate",
