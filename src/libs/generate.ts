@@ -105,7 +105,7 @@ export const generateReportCode = async (spkId: string, stage: ProcessStage): Pr
             stageCode = 'FIN'
             break
         default:
-            stageCode = 'UNK' // Unknown stage
+            stageCode = 'UNK'
     }
 
     const count = await prisma.productionReport.count({
@@ -134,7 +134,6 @@ export const generateItemCode = async (itemType: ItemType): Promise<string> => {
     const year = date.getFullYear().toString().slice(-2)
     const month = String(date.getMonth() + 1).toString().padStart(2, '0')
     
-    // Map ItemType to a single character code
     let typeCode: string
     switch (itemType) {
         case 'MATERIAL':
@@ -147,10 +146,9 @@ export const generateItemCode = async (itemType: ItemType): Promise<string> => {
             typeCode = 'P'
             break
         default:
-            typeCode = 'X' // Fallback code
+            typeCode = 'X'
     }
 
-    // Find the last code with this format and type code
     const lastItem = await prisma.item.findFirst({
         where: {
             code: {
@@ -163,7 +161,6 @@ export const generateItemCode = async (itemType: ItemType): Promise<string> => {
         }
     })
 
-    // Extract sequence number from existing code or start at 1
     let sequence = 1
     if (lastItem?.code) {
         const parts = lastItem.code.split('-')
@@ -175,7 +172,6 @@ export const generateItemCode = async (itemType: ItemType): Promise<string> => {
         }
     }
 
-    // Format the code with the sequence padded to 4 digits
     return `ITEM-${typeCode}${year}${month}-${sequence.toString().padStart(4, '0')}`
 }
 
@@ -208,7 +204,6 @@ export const generateMachineCode = async (stage: ProcessStage): Promise<string> 
 
     let sequence = 1
     if (lastMachine) {
-        // Example code: MC-PRE001
         const codePart = lastMachine.code.replace(`MC-${stageCode}`, '')
         const lastSequence = parseInt(codePart)
         if (!isNaN(lastSequence)) {
@@ -225,7 +220,6 @@ export const generateDeliveryCode = async (): Promise<string> => {
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const day = String(date.getDate()).padStart(2, '0')
 
-    // Find the last delivery order for today
     const todayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate())
     const todayEnd = new Date(todayStart)
     todayEnd.setDate(todayEnd.getDate() + 1)
@@ -244,7 +238,6 @@ export const generateDeliveryCode = async (): Promise<string> => {
 
     let sequence = 1
     if (lastDelivery?.code) {
-        // Extract sequence from code format: DO-YYMMDD-XXX
         const parts = lastDelivery.code.split('-')
         if (parts.length === 3) {
             const lastSequence = parseInt(parts[2])
@@ -256,3 +249,4 @@ export const generateDeliveryCode = async (): Promise<string> => {
 
     return `SJ-${year}${month}${day}-${sequence.toString().padStart(3, '0')}`
 }
+

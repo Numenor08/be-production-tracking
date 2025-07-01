@@ -91,3 +91,4 @@ export const addStockValidation = [
         .isIn(Object.values(ProcessStage))
         .withMessage('Valid production stage is required'),
 ]
+

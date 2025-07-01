@@ -14,7 +14,6 @@ import {
 
 const router = express.Router()
 
-// Pallet routes
 router.get('/', validate(palletQueryValidation), palletController.getAllPallets)
 router.get('/:id', validate(palletIdValidation), palletController.getPalletById)
 router.post(
@@ -38,14 +37,12 @@ router.post(
     palletController.markAsShipped,
 )
 
-// Pallet item route (manual add - kept for specific use cases)
 router.post(
     '/:palletId/items',
     validate([...palletIdValidation, ...addPalletItemValidation]),
     palletController.addPalletItem,
 )
 
-// Improved pallet management routes
 router.post(
     '/sales-order/create-pallets',
     validate(createPalletsForSalesOrderValidation),
@@ -63,3 +60,4 @@ router.post(
 )
 
 export default router
+

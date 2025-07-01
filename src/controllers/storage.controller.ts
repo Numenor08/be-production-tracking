@@ -2,6 +2,12 @@ import { Request, Response } from 'express'
 import { PrismaClient } from '../../generated/prisma'
 import { ProcessStage } from '../types/types'
 import { successResponse, errorResponse } from '../utils/api.utils'
+import {
+    recordAddStockMutation,
+    recordReduceStockMutation,
+    recordDeliveryMutation,
+    recordPalletMutation,
+} from '../utils/stockMutation.utils'
 
 const prisma = new PrismaClient()
 
@@ -16,7 +22,6 @@ export const getAllStorage = async (
         const itemType = req.query.itemType as string | undefined
         const stage = req.query.stage as ProcessStage | undefined
 
-        // Build where condition for filtering
         const where: any = {}
 
         if (search) {
@@ -69,7 +74,6 @@ export const getAllStorage = async (
             orderBy: { updatedAt: 'desc' },
         })
 
-        // Calculate totals stock each item
         const total: Record<string, number> = {}
         storageItems.forEach((item) => {
             const key = `${item.item.name}`
@@ -139,7 +143,6 @@ export const createStorage = async (
     try {
         const { spkId, itemId, spkStage, stock } = req.body
 
-        // Check if SPK exists
         const spk = await prisma.sPK.findUnique({
             where: { id: spkId },
         })
@@ -148,7 +151,6 @@ export const createStorage = async (
             return res.status(404).json(errorResponse('SPK not found'))
         }
 
-        // Check if item exists
         const item = await prisma.item.findUnique({
             where: { id: itemId },
         })
@@ -157,7 +159,6 @@ export const createStorage = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Check if storage already exists
         const existingStorage = await prisma.storage.findFirst({
             where: {
                 spkId,
@@ -176,7 +177,6 @@ export const createStorage = async (
                 )
         }
 
-        // Create storage entry
         const storage = await prisma.storage.create({
             data: {
                 spk: { connect: { id: spkId } },
@@ -211,7 +211,6 @@ export const updateStorage = async (
         const { id } = req.params
         const { stock } = req.body
 
-        // Check if storage exists
         const existingStorage = await prisma.storage.findUnique({
             where: { id },
         })
@@ -220,7 +219,6 @@ export const updateStorage = async (
             return res.status(404).json(errorResponse('Storage item not found'))
         }
 
-        // Update storage
         const updatedStorage = await prisma.storage.update({
             where: { id },
             data: {
@@ -253,7 +251,6 @@ export const deleteStorage = async (
     try {
         const { id } = req.params
 
-        // Check if storage exists
         const existingStorage = await prisma.storage.findUnique({
             where: { id },
             include: {
@@ -275,7 +272,6 @@ export const deleteStorage = async (
                 )
         }
 
-        // Delete storage
         await prisma.storage.delete({
             where: { id },
         })
@@ -305,7 +301,6 @@ export const transferStock = async (
         }
 
         const result = await prisma.$transaction(async (tx) => {
-            // Get source and target storage
             const source = await tx.storage.findUnique({
                 where: { id: sourceId },
             })
@@ -329,7 +324,6 @@ export const transferStock = async (
                 }
             }
 
-            // Decrease source stock
             const updatedSource = await tx.storage.update({
                 where: { id: sourceId },
                 data: {
@@ -339,7 +333,6 @@ export const transferStock = async (
                 },
             })
 
-            // Increase target stock
             const updatedTarget = await tx.storage.update({
                 where: { id: targetId },
                 data: {
@@ -380,7 +373,6 @@ export const getStorageByItem = async (
     try {
         const { itemId } = req.params
 
-        // Check if item exists
         const item = await prisma.item.findUnique({
             where: { id: itemId },
         })
@@ -389,7 +381,6 @@ export const getStorageByItem = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Get all storage entries for the item
         const storageItems = await prisma.storage.findMany({
             where: { itemId },
             include: {
@@ -408,7 +399,6 @@ export const getStorageByItem = async (
             },
         })
 
-        // Calculate totals
         const totalStock = storageItems.reduce(
             (sum, item) => sum + item.stock,
             0,
@@ -441,7 +431,6 @@ export const getStorageBySPK = async (
     try {
         const { spkId } = req.params
 
-        // Check if SPK exists
         const spk = await prisma.sPK.findUnique({
             where: { id: spkId },
         })
@@ -450,7 +439,6 @@ export const getStorageBySPK = async (
             return res.status(404).json(errorResponse('SPK not found'))
         }
 
-        // Get all storage entries for the SPK
         const storageItems = await prisma.storage.findMany({
             where: { spkId },
             include: {
@@ -458,7 +446,6 @@ export const getStorageBySPK = async (
             },
         })
 
-        // Group by production stage
         const groupedByStage = storageItems.reduce((acc: any, item) => {
             const stageName = item.spkStage ?? 'UNKNOWN_STAGE'
             if (!acc[stageName]) {
@@ -497,7 +484,6 @@ export const reduceStockByItem = async (
             return res.status(400).json(errorResponse('Valid itemId and positive quantity are required'))
         }
 
-        // Verify the item exists
         const item = await prisma.item.findUnique({
             where: { id: itemId }
         })
@@ -506,7 +492,6 @@ export const reduceStockByItem = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Use the utility function
         const result = await reduceStockFromStorage(prisma, itemId, quantity)
 
         if (!result.success) {
@@ -542,8 +527,7 @@ export const addStockByItem = async (
                 'Valid itemId and positive quantity are required'
             ))
         }
-``
-        // Use the utility function
+
         const result = await addStockToStorage(prisma, itemId, spkId, quantity, stage as ProcessStage)
 
         if (!result.success) {
@@ -565,24 +549,20 @@ export const addStockByItem = async (
     }
 }
 
-//  Utility function to reduce stock from storage that can be called from other controllers
 export const reduceStockFromStorage = async (
     prismaInstance: PrismaClient,
     itemId: string,
     quantity: number,
-    prioritySpkId?: string // Optional SPK ID for prioritizing specific storage items
+    prioritySpkId?: string
 ): Promise<{success: boolean, message: string, updates?: any[]}> => {
     try {
         if (!itemId || !quantity || quantity <= 0) {
             return {success: false, message: 'Valid itemId and positive quantity are required'}
         }
 
-        // Find all storage entries for this item, with priority ordering
-        // First prioritize storage from specific SPK if provided, then FIFO for others
         let storageItems;
         
         if (prioritySpkId) {
-            // Get priority items first (from specific SPK)
             const priorityItems = await prismaInstance.storage.findMany({
                 where: { 
                     itemId,
@@ -604,7 +584,6 @@ export const reduceStockFromStorage = async (
                 }
             });
 
-            // Get other items (not from priority SPK)
             const otherItems = await prismaInstance.storage.findMany({
                 where: { 
                     itemId,
@@ -626,10 +605,8 @@ export const reduceStockFromStorage = async (
                 }
             });
 
-            // Combine: priority items first, then others
             storageItems = [...priorityItems, ...otherItems];
         } else {
-            // Standard FIFO ordering when no priority SPK
             storageItems = await prismaInstance.storage.findMany({
                 where: { 
                     itemId,
@@ -653,7 +630,6 @@ export const reduceStockFromStorage = async (
 
         const totalAvailable = storageItems.reduce((sum, item) => sum + item.stock, 0)
         
-        // Quickly return false if there's not enough stock
         if (totalAvailable < quantity) {
             const itemName = storageItems.length > 0 ? storageItems[0].item.name : '(unknown)';
             return {
@@ -662,7 +638,6 @@ export const reduceStockFromStorage = async (
             }
         }
 
-        // Run everything in a transaction to ensure consistency
         const updates = await prismaInstance.$transaction(async (tx) => {
             let remainingToReduce = quantity;
             const updateList = [];
@@ -671,8 +646,8 @@ export const reduceStockFromStorage = async (
                 if (remainingToReduce <= 0) break
                 
                 const toReduce = Math.min(storage.stock, remainingToReduce)
+                const quantityBefore = storage.stock
                 
-                // Update the storage entry
                 const updated = await tx.storage.update({
                     where: { id: storage.id },
                     data: { stock: { decrement: toReduce } },
@@ -681,6 +656,23 @@ export const reduceStockFromStorage = async (
                         item: { select: { name: true } }
                     }
                 })
+
+                try {
+                    await recordReduceStockMutation(
+                        tx,
+                        itemId,
+                        storage.id,
+                        toReduce,
+                        quantityBefore,
+                        {
+                            spkId: prioritySpkId || storage.spkId || undefined,
+                            notes: `Stock reduction - FIFO${prioritySpkId ? ' with SPK priority' : ''}`,
+                            stage: storage.spkStage as ProcessStage | undefined,
+                        }
+                    )
+                } catch (mutationError) {
+                    console.error('Error recording reduce stock mutation:', mutationError)
+                }
                 
                 updateList.push({
                     storageId: storage.id,
@@ -693,7 +685,6 @@ export const reduceStockFromStorage = async (
                 remainingToReduce -= toReduce
             }
             
-            // Clean up any storage entries that now have 0 stock
             await tx.storage.deleteMany({
                 where: { 
                     itemId,
@@ -720,14 +711,18 @@ export const addStockToStorage = async (
     itemId: string,
     spkId: string = '',
     quantity: number,
-    stage?: ProcessStage
+    stage?: ProcessStage,
+    options: {
+        performedByUserId?: string
+        notes?: string
+        productionReportId?: string
+    } = {}
 ): Promise<{success: boolean, message: string, storage?: any}> => {
     try {
         if (!itemId || !quantity || quantity <= 0) {
             return {success: false, message: 'Valid itemId and positive quantity are required'}
         }
 
-        // Verify item exists
         const item = await prismaInstance.item.findUnique({
             where: { id: itemId }
         });
@@ -736,9 +731,7 @@ export const addStockToStorage = async (
             return {success: false, message: `Item with ID ${itemId} not found`};
         }
 
-        // Run in a transaction
         const result = await prismaInstance.$transaction(async (tx) => {
-            // Build where clause dynamically
             const whereClause: any = {
                 itemId,
             };
@@ -749,14 +742,16 @@ export const addStockToStorage = async (
                 whereClause.spkId = spkId;
             }
 
-            // Check if storage entry already exists
             const existingStorage = await tx.storage.findFirst({
                 where: whereClause
             });
 
+            let storage;
+            let quantityBefore = 0;
+
             if (existingStorage) {
-                // Update existing storage
-                return await tx.storage.update({
+                quantityBefore = existingStorage.stock;
+                storage = await tx.storage.update({
                     where: { id: existingStorage.id },
                     data: { stock: { increment: quantity } },
                     include: {
@@ -765,15 +760,17 @@ export const addStockToStorage = async (
                     }
                 });
             } else {
-                // Create new storage entry
                 const data: any = {
                     itemId,
                     stock: quantity
                 };
+                if (spkId) {
+                    data.spkId = spkId;
+                }
                 if (stage !== undefined) {
                     data.spkStage = stage;
                 }
-                return await tx.storage.create({
+                storage = await tx.storage.create({
                     data,
                     include: {
                         item: { select: { name: true } },
@@ -781,6 +778,25 @@ export const addStockToStorage = async (
                     }
                 });
             }
+
+            try {
+                await recordAddStockMutation(
+                    tx,
+                    itemId,
+                    storage.id,
+                    quantity,
+                    quantityBefore,
+                    {
+                        spkId: spkId || undefined,
+                        stage,
+                        ...options,
+                    }
+                );
+            } catch (mutationError) {
+                console.error('Error recording stock mutation:', mutationError);
+            }
+
+            return storage;
         });
 
         return {
@@ -794,7 +810,6 @@ export const addStockToStorage = async (
     }
 }
 
-// New function specifically for pallet operations with SPK priority
 export const reduceStockForPallet = async (
     req: Request, 
     res: Response
@@ -806,7 +821,6 @@ export const reduceStockForPallet = async (
             return res.status(400).json(errorResponse('Valid itemId and positive quantity are required'))
         }
 
-        // Verify the item exists
         const item = await prisma.item.findUnique({
             where: { id: itemId }
         })
@@ -815,7 +829,6 @@ export const reduceStockForPallet = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Use the utility function with priority SPK
         const result = await reduceStockFromStorage(prisma, itemId, quantity, prioritySpkId)
 
         if (!result.success) {
@@ -840,7 +853,6 @@ export const reduceStockForPallet = async (
     }
 }
 
-// Utility function to reduce stock from storage specifically for pallet operations
 export const reduceStockForPalletUtil = async (
     prismaInstance: PrismaClient,
     palletId: string,
@@ -853,11 +865,9 @@ export const reduceStockForPalletUtil = async (
             return {success: false, message: 'Valid palletId, itemId and positive quantity are required'}
         }
 
-        // Find all storage entries for this item, with priority ordering
         let storageItems;
         
         if (prioritySpkId) {
-            // Get priority items first (from specific SPK)
             const priorityItems = await prismaInstance.storage.findMany({
                 where: { 
                     itemId,
@@ -879,7 +889,6 @@ export const reduceStockForPalletUtil = async (
                 }
             });
 
-            // Get other items (not from priority SPK)
             const otherItems = await prismaInstance.storage.findMany({
                 where: { 
                     itemId,
@@ -901,10 +910,8 @@ export const reduceStockForPalletUtil = async (
                 }
             });
 
-            // Combine: priority items first, then others
             storageItems = [...priorityItems, ...otherItems];
         } else {
-            // Standard FIFO ordering when no priority SPK
             storageItems = await prismaInstance.storage.findMany({
                 where: { 
                     itemId,
@@ -928,7 +935,6 @@ export const reduceStockForPalletUtil = async (
 
         const totalAvailable = storageItems.reduce((sum, item) => sum + item.stock, 0)
         
-        // Check if there's enough stock
         if (totalAvailable < quantity) {
             const itemName = storageItems.length > 0 ? storageItems[0].item.name : '(unknown)';
             return {
@@ -937,7 +943,6 @@ export const reduceStockForPalletUtil = async (
             }
         }
 
-        // Run everything in a transaction to ensure consistency
         const result = await prismaInstance.$transaction(async (tx) => {
             let remainingToReduce = quantity;
             const palletItems = [];
@@ -947,14 +952,13 @@ export const reduceStockForPalletUtil = async (
                 if (remainingToReduce <= 0) break
                 
                 const toReduce = Math.min(storage.stock, remainingToReduce)
+                const quantityBefore = storage.stock
                 
-                // Update the storage entry
                 const updated = await tx.storage.update({
                     where: { id: storage.id },
                     data: { stock: { decrement: toReduce } },
                 })
                 
-                // Create or update PalletItem record
                 const existingPalletItem = await tx.palletItem.findUnique({
                     where: {
                         palletId_storageItemId: {
@@ -997,13 +1001,30 @@ export const reduceStockForPalletUtil = async (
                         }
                     });
                 }
+
+                try {
+                    await recordPalletMutation(
+                        tx,
+                        itemId,
+                        storage.id,
+                        toReduce,
+                        quantityBefore,
+                        {
+                            spkId: prioritySpkId || storage.spkId || undefined,
+                            palletId,
+                            notes: `Items moved to pallet${prioritySpkId ? ' (priority SPK)' : ' (FIFO)'}`,
+                            stage: storage.spkStage as ProcessStage | undefined,
+                        }
+                    )
+                } catch (mutationError) {
+                    console.error('Error recording pallet mutation:', mutationError)
+                }
                 
                 palletItems.push(palletItem);
                 totalQuantityReduced += toReduce;
                 remainingToReduce -= toReduce;
             }
             
-            // Clean up any storage entries that now have 0 stock
             await tx.storage.deleteMany({
                 where: { 
                     itemId,
@@ -1039,3 +1060,4 @@ export default {
     addStockByItem,
     reduceStockForPallet,
 }
+

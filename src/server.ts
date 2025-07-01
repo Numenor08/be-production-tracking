@@ -13,6 +13,7 @@ import palletRoute from './routes/pallet.route'
 import deliveryRoute from './routes/delivery.route'
 import customerRoute from './routes/customer.route'
 import userRoute from './routes/user.route'
+import stockMutationRoute from './routes/stockMutation.route'
 import notFoundHandler from './middlewares/notFound.middleware'
 import {
     printServerBanner,
@@ -40,13 +41,12 @@ app.use(
     }),
 )
 
-// Session configuration with Prisma Store
 app.use(
     session({
         store: new PrismaSessionStore(
             prisma,
             {
-                checkPeriod: 2 * 60 * 1000, // 2 minutes - cleanup expired sessions
+                checkPeriod: 2 * 60 * 1000,
                 dbRecordIdIsSessionId: true,
                 dbRecordIdFunction: undefined,
             }
@@ -54,12 +54,12 @@ app.use(
         secret: process.env.SESSION_SECRET || 'your-secret-key-here-change-in-production',
         resave: false,
         saveUninitialized: false,
-        name: 'sessionId', // Custom session cookie name
+        name: 'sessionId',
         cookie: {
-            secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-            httpOnly: true, // Prevent XSS attacks
-            maxAge: 24 * 60 * 60 * 1000, // 24 hours
-            sameSite: 'strict', // CSRF protection
+            secure: process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000,
+            sameSite: 'strict',
         },
     }),
 )
@@ -80,6 +80,7 @@ apiV1Router.use('/spk', requireAuth, spkRoutes)
 apiV1Router.use('/report', requireAuth, reportRoute)
 apiV1Router.use('/pallet', requireAuth, palletRoute)
 apiV1Router.use('/delivery', requireAuth, deliveryRoute)
+apiV1Router.use('/stock-mutation', requireAuth, stockMutationRoute)
 
 app.use('/api/v1', apiV1Router)
 
@@ -100,6 +101,6 @@ app.use(notFoundHandler)
 app.listen(port, () => {
     printServerBanner()
     
-    // Start session cleanup scheduler
     startSessionCleanup()
 })
+

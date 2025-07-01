@@ -1,26 +1,24 @@
 import { Request, Response } from 'express'
 import { PrismaClient } from '../../generated/prisma'
-import { PalletStatus } from '../types/types'
+import { PalletStatus, ProductionReportTag } from '../types/types'
 import { successResponse, errorResponse } from '../utils/api.utils'
 import { generatePalletCode } from '../libs/generate'
 import { reduceStockFromStorage, addStockToStorage, reduceStockForPalletUtil } from './storage.controller'
+import { recordPalletMutation } from '../utils/stockMutation.utils'
 
 const prisma = new PrismaClient()
 
-// Get all pallets with pagination and filtering
 export const getAllPallets = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
-        // Parse query parameters
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 10
         const search = req.query.search as string | undefined
         const status = req.query.status as PalletStatus | undefined
         const salesOrderId = req.query.salesOrderId as string | undefined
 
-        // Build where condition for filtering
         const where: any = {}
 
         if (search) {
@@ -39,12 +37,10 @@ export const getAllPallets = async (
             where.salesOrderId = salesOrderId
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.pallet.count({ where })
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch pallets with pagination and related data
         const pallets = await prisma.pallet.findMany({
             where,
             skip,
@@ -74,7 +70,6 @@ export const getAllPallets = async (
             },
         })
 
-        // Calculate totals for each pallet
         const palletsWithTotals = pallets.map((pallet) => {
             const totalQuantity = pallet.items.reduce(
                 (sum, item) => sum + item.quantity,
@@ -112,7 +107,6 @@ export const getAllPallets = async (
     }
 }
 
-// Get pallet by ID
 export const getPalletById = async (
     req: Request,
     res: Response,
@@ -146,7 +140,6 @@ export const getPalletById = async (
             return res.status(404).json(errorResponse('Pallet not found'))
         }
 
-        // Calculate totals
         const totalQuantity = pallet.items.reduce(
             (sum, item) => sum + item.quantity,
             0,
@@ -170,7 +163,6 @@ export const getPalletById = async (
     }
 }
 
-// Create new pallet
 export const createPallet = async (
     req: Request,
     res: Response,
@@ -178,7 +170,6 @@ export const createPallet = async (
     try {
         const { salesOrderId, itemId, maxQuantity } = req.body
 
-        // Check if sales order exists and is completed
         const salesOrder = await prisma.salesOrder.findUnique({
             where: { id: salesOrderId },
             include: {
@@ -202,7 +193,6 @@ export const createPallet = async (
                 )
         }
 
-        // Check if item exists in the sales order
         if (salesOrder.items.length === 0) {
             return res
                 .status(400)
@@ -213,7 +203,6 @@ export const createPallet = async (
                 )
         }
 
-        // Check if item exists
         const item = await prisma.item.findUnique({
             where: { id: itemId },
         })
@@ -222,14 +211,11 @@ export const createPallet = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Generate unique pallet code
         const code = await generatePalletCode()
         const qrCodeData = `PALLET:${code}:${new Date().getTime()}`
 
-        // Use maxQuantity from request or fall back to sales order default
         const finalMaxQuantity = maxQuantity || salesOrder.maxQuantityPerPallet
 
-        // Create pallet
         const pallet = await prisma.pallet.create({
             data: {
                 code,
@@ -271,7 +257,6 @@ export const createPallet = async (
     }
 }
 
-// Update pallet details
 export const updatePallet = async (
     req: Request,
     res: Response,
@@ -280,7 +265,6 @@ export const updatePallet = async (
         const { id } = req.params
         const { salesOrderId, status } = req.body
 
-        // Check if pallet exists
         const existingPallet = await prisma.pallet.findUnique({
             where: { id },
             include: {
@@ -292,7 +276,6 @@ export const updatePallet = async (
             return res.status(404).json(errorResponse('Pallet not found'))
         }
 
-        // Check if sales order exists if provided
         if (salesOrderId) {
             const salesOrder = await prisma.salesOrder.findUnique({
                 where: { id: salesOrderId },
@@ -305,7 +288,6 @@ export const updatePallet = async (
             }
         }
 
-        // Validate status change if pallet has items
         if (
             status === PalletStatus.SHIPPED &&
             existingPallet.items.length === 0
@@ -315,7 +297,6 @@ export const updatePallet = async (
                 .json(errorResponse('Cannot mark empty pallet as shipped'))
         }
 
-        // Update pallet
         const updatedPallet = await prisma.pallet.update({
             where: { id },
             data: {
@@ -347,7 +328,6 @@ export const updatePallet = async (
     }
 }
 
-// Delete pallet
 export const deletePallet = async (
     req: Request,
     res: Response,
@@ -355,7 +335,6 @@ export const deletePallet = async (
     try {
         const { id } = req.params
 
-        // Check if pallet exists
         const existingPallet = await prisma.pallet.findUnique({
             where: { id },
             include: {
@@ -367,17 +346,14 @@ export const deletePallet = async (
             return res.status(404).json(errorResponse('Pallet not found'))
         }
 
-        // Don't allow deletion if pallet has been shipped
         if (existingPallet.status === PalletStatus.SHIPPED) {
             return res
                 .status(400)
                 .json(errorResponse('Cannot delete shipped pallets'))
         }
 
-        // Handle returning items to storage if pallet has items
         if (existingPallet.items.length > 0) {
             await prisma.$transaction(async (tx) => {
-                // Return each item to storage
                 for (const item of existingPallet.items) {
                     await tx.storage.update({
                         where: { id: item.storageItemId },
@@ -387,18 +363,15 @@ export const deletePallet = async (
                     })
                 }
 
-                // Delete pallet items
                 await tx.palletItem.deleteMany({
                     where: { palletId: id },
                 })
 
-                // Delete the pallet
                 await tx.pallet.delete({
                     where: { id },
                 })
             })
         } else {
-            // If no items, simply delete the pallet
             await prisma.pallet.delete({
                 where: { id },
             })
@@ -411,7 +384,6 @@ export const deletePallet = async (
     }
 }
 
-// Add items to pallet using FIFO with SPK priority
 export const addPalletItem = async (
     req: Request,
     res: Response,
@@ -420,7 +392,6 @@ export const addPalletItem = async (
         const { palletId } = req.params
         const { itemId, quantity } = req.body
 
-        // Check if pallet exists
         const pallet = await prisma.pallet.findUnique({
             where: { id: palletId },
             include: {
@@ -449,7 +420,6 @@ export const addPalletItem = async (
                 .json(errorResponse('Cannot add items to shipped pallet'))
         }
 
-        // Verify item matches pallet's item type
         if (itemId !== pallet.itemId) {
             return res
                 .status(400)
@@ -460,7 +430,6 @@ export const addPalletItem = async (
                 )
         }
 
-        // Check if adding this quantity would exceed pallet max capacity
         const currentTotalQuantity = pallet.currentQuantity || 0
         
         if (currentTotalQuantity + quantity > pallet.maxQuantity) {
@@ -473,14 +442,11 @@ export const addPalletItem = async (
                 )
         }
 
-        // Get priority SPK IDs from the sales order
         const prioritySpkIds = pallet.salesOrder.spk.map(spk => spk.id)
         
-        // Use FIFO with SPK priority to reduce stock and create pallet items
         let stockReductionResult;
         let usedPrioritySpk = false;
 
-        // Try to use stock from priority SPKs first
         for (const spkId of prioritySpkIds) {
             stockReductionResult = await reduceStockForPalletUtil(prisma, palletId, itemId, quantity, spkId);
             if (stockReductionResult.success) {
@@ -489,7 +455,6 @@ export const addPalletItem = async (
             }
         }
 
-        // If no priority SPK stock available, use regular FIFO
         if (!stockReductionResult || !stockReductionResult.success) {
             stockReductionResult = await reduceStockForPalletUtil(prisma, palletId, itemId, quantity);
         }
@@ -498,11 +463,9 @@ export const addPalletItem = async (
             return res.status(400).json(errorResponse(stockReductionResult.message));
         }
 
-        // Update pallet in transaction
         const updatedPallet = await prisma.$transaction(async (tx) => {
             const newCurrentQuantity = currentTotalQuantity + (stockReductionResult?.totalQuantityReduced || 0);
             
-            // Update pallet current quantity and status
             const palletStatus = newCurrentQuantity >= pallet.maxQuantity 
                 ? PalletStatus.READY 
                 : PalletStatus.NOT_READY;
@@ -565,7 +528,6 @@ export const addPalletItem = async (
     }
 }
 
-// Mark pallet as shipped
 export const markAsShipped = async (
     req: Request,
     res: Response,
@@ -573,7 +535,6 @@ export const markAsShipped = async (
     try {
         const { id } = req.params
 
-        // Check if pallet exists
         const pallet = await prisma.pallet.findUnique({
             where: { id },
             include: {
@@ -585,14 +546,12 @@ export const markAsShipped = async (
             return res.status(404).json(errorResponse('Pallet not found'))
         }
 
-        // Don't allow shipping empty pallets
         if (pallet.items.length === 0) {
             return res
                 .status(400)
                 .json(errorResponse('Cannot ship empty pallet'))
         }
 
-        // Update pallet status
         const updatedPallet = await prisma.pallet.update({
             where: { id },
             data: {
@@ -626,7 +585,6 @@ export const markAsShipped = async (
     }
 }
 
-// Create pallets automatically for a completed sales order
 export const createPalletsForSalesOrder = async (
     req: Request,
     res: Response,
@@ -634,7 +592,6 @@ export const createPalletsForSalesOrder = async (
     try {
         const { salesOrderId, autoFill } = req.body
 
-        // Check if sales order exists and is completed
         const salesOrder = await prisma.salesOrder.findUnique({
             where: { id: salesOrderId },
             include: {
@@ -670,19 +627,16 @@ export const createPalletsForSalesOrder = async (
         const createdPallets = []
         const maxQuantityPerPallet = salesOrder.maxQuantityPerPallet
 
-        // Create pallets for each item in the sales order
         for (const salesOrderItem of salesOrder.items) {
             if (!salesOrderItem.item) continue
 
             const targetQuantity = salesOrderItem.targetQuantity
             const numberOfPallets = Math.ceil(targetQuantity / maxQuantityPerPallet)
 
-            // Create pallets for this item
             for (let i = 0; i < numberOfPallets; i++) {
                 const code = await generatePalletCode()
                 const qrCodeData = `PALLET:${code}:${new Date().getTime()}`
                 
-                // Calculate target quantity for this pallet
                 const remainingQuantity = targetQuantity - (i * maxQuantityPerPallet)
                 const palletTargetQuantity = Math.min(remainingQuantity, maxQuantityPerPallet)
 
@@ -701,17 +655,14 @@ export const createPalletsForSalesOrder = async (
                     },
                 })
 
-                // If autoFill is requested, try to fill the pallet automatically
                 if (autoFill) {
                     try {
-                        // Get priority SPK IDs from the sales order
                         const prioritySpkIds = salesOrder.spk.map(spk => spk.id)
                         
                         let totalFilled = 0
                         let usedPrioritySpk = false
                         let stockResult = null
 
-                        // Try to fill using priority SPKs first
                         for (const spkId of prioritySpkIds) {
                             stockResult = await reduceStockForPalletUtil(
                                 prisma, 
@@ -727,7 +678,6 @@ export const createPalletsForSalesOrder = async (
                             }
                         }
 
-                        // If no priority SPK stock available or not enough, use regular FIFO
                         if (!stockResult || !stockResult.success || totalFilled < palletTargetQuantity) {
                             const remainingToFill = palletTargetQuantity - totalFilled
                             if (remainingToFill > 0) {
@@ -743,7 +693,6 @@ export const createPalletsForSalesOrder = async (
                             }
                         }
 
-                        // Update pallet with filled quantity
                         if (totalFilled > 0) {
                             await prisma.pallet.update({
                                 where: { id: pallet.id },
@@ -764,7 +713,6 @@ export const createPalletsForSalesOrder = async (
                         })
                     } catch (fillError) {
                         console.error('Error filling pallet:', fillError)
-                        // Continue with empty pallet if filling fails
                         createdPallets.push({
                             ...pallet,
                             targetQuantity: palletTargetQuantity,
@@ -805,7 +753,6 @@ export const createPalletsForSalesOrder = async (
     }
 }
 
-// Fill pallet automatically using FIFO with SPK priority
 export const fillPalletAutomatically = async (
     req: Request,
     res: Response,
@@ -814,7 +761,6 @@ export const fillPalletAutomatically = async (
         const { palletId } = req.params
         const { targetQuantity } = req.body
 
-        // Check if pallet exists
         const pallet = await prisma.pallet.findUnique({
             where: { id: palletId },
             include: {
@@ -842,7 +788,6 @@ export const fillPalletAutomatically = async (
                 .json(errorResponse('Cannot fill shipped pallet'))
         }
 
-        // Calculate how much more can be added
         const currentQuantity = pallet.currentQuantity || 0
         const maxQuantity = pallet.maxQuantity
         const quantityToFill = targetQuantity 
@@ -855,17 +800,13 @@ export const fillPalletAutomatically = async (
                 .json(errorResponse('Pallet is already full or target quantity is invalid'))
         }
 
-        // Get priority SPK IDs from the sales order
         const prioritySpkIds = pallet.salesOrder.spk.map(spk => spk.id)
         
-        // Try to fill using FIFO with SPK priority
         let totalFilled = 0
         let usedPrioritySpk = false
 
-        // Use the proper utility function that creates PalletItem records
         let stockResult = null
 
-        // First, try to use stock from priority SPKs
         for (const spkId of prioritySpkIds) {
             stockResult = await reduceStockForPalletUtil(
                 prisma, 
@@ -881,7 +822,6 @@ export const fillPalletAutomatically = async (
             }
         }
 
-        // If no priority SPK stock available or not enough, use regular FIFO
         if (!stockResult || !stockResult.success || totalFilled < quantityToFill) {
             const remainingToFill = quantityToFill - totalFilled
             if (remainingToFill > 0) {
@@ -904,7 +844,6 @@ export const fillPalletAutomatically = async (
                 .json(errorResponse('No stock available for this item'))
         }
 
-        // Update pallet
         const updatedPallet = await prisma.pallet.update({
             where: { id: palletId },
             data: {
@@ -949,7 +888,6 @@ export const fillPalletAutomatically = async (
     }
 }
 
-// Check stock availability for sales order pallets
 export const checkStockAvailabilityForSalesOrder = async (
     req: Request,
     res: Response,
@@ -957,7 +895,6 @@ export const checkStockAvailabilityForSalesOrder = async (
     try {
         const { salesOrderId } = req.params
 
-        // Check if sales order exists
         const salesOrder = await prisma.salesOrder.findUnique({
             where: { id: salesOrderId },
             include: {
@@ -984,7 +921,6 @@ export const checkStockAvailabilityForSalesOrder = async (
         for (const salesOrderItem of salesOrder.items) {
             if (!salesOrderItem.item) continue
 
-            // Get all storage for this item
             const storageItems = await prisma.storage.findMany({
                 where: { 
                     itemId: salesOrderItem.item.id,
@@ -1001,7 +937,6 @@ export const checkStockAvailabilityForSalesOrder = async (
                 orderBy: { createdAt: 'asc' }
             })
 
-            // Separate priority and regular stock
             const prioritySpkIds = salesOrder.spk.map(spk => spk.id)
             const priorityStock = storageItems
                 .filter(storage => storage.spkId && prioritySpkIds.includes(storage.spkId))
@@ -1075,3 +1010,4 @@ export default {
     fillPalletAutomatically,
     checkStockAvailabilityForSalesOrder,
 }
+

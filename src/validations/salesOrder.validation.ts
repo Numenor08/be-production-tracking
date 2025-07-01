@@ -1,7 +1,6 @@
 import { body, param, query } from 'express-validator'
 import { OrderStatus } from '../types/types'
 
-// Helper function to validate enum values
 const isValidOrderStatus = (value: any): boolean => {
     return Object.values(OrderStatus).includes(value)
 }
@@ -88,3 +87,4 @@ export const salesOrderPaginationValidation = [
 export const salesOrderIdValidation = [
     param('id').notEmpty().withMessage('Sales order ID is required'),
 ]
+

@@ -22,3 +22,4 @@ export const notFoundHandler = (
 }
 
 export default notFoundHandler
+

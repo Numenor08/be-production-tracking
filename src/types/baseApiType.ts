@@ -4,3 +4,4 @@ export interface BaseApiType {
     data?: any
     metadata?: any
 }
+

@@ -17,22 +17,19 @@ import {
 
 const router = express.Router()
 
-// GET routes
 router.get('/', validate(customerPaginationValidation), getAllCustomers)
 router.get('/statistics', getCustomerStatistics)
 router.get('/:id', validate(customerIdValidation), getCustomerById)
 
-// POST routes
 router.post('/', validate(createCustomerValidation), createCustomer)
 
-// PUT routes
 router.put(
     '/:id',
     validate([...customerIdValidation, ...updateCustomerValidation]),
     updateCustomer,
 )
 
-// DELETE routes
 router.delete('/:id', validate(customerIdValidation), deleteCustomer)
 
 export default router
+

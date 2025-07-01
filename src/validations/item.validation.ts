@@ -1,7 +1,6 @@
 import { body, param, query } from 'express-validator'
 import { ItemType } from '../types/types'
 
-// Helper function to validate enum values
 const isValidItemType = (value: any): boolean => {
     return Object.values(ItemType).includes(value)
 }
@@ -79,3 +78,4 @@ export const paginationValidation = [
 export const itemIdValidation = [
     param('id').notEmpty().withMessage('Item ID is required'),
 ]
+

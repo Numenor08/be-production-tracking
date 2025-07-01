@@ -11,7 +11,6 @@ export const getAllSalesOrders = async (
     res: Response,
 ): Promise<any> => {
     try {
-        // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 30
         const search = req.query.search as string | undefined
@@ -20,7 +19,6 @@ export const getAllSalesOrders = async (
             (req.query.sortOrder as 'asc' | 'desc' | undefined) || 'desc'
         const status = req.query.status as OrderStatus | undefined
 
-        // Build where condition for filtering
         const where: any = {}
         if (search) {
             where.OR = [
@@ -33,7 +31,6 @@ export const getAllSalesOrders = async (
             where.status = status
         }
 
-        // Build orderBy for sorting
         const orderBy: any = {}
         if (sortBy) {
             orderBy[sortBy] = sortOrder
@@ -41,14 +38,11 @@ export const getAllSalesOrders = async (
             orderBy.createdAt = 'desc'
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.salesOrder.count({ where })
 
-        // Calculate pagination values
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch sales orders with pagination
         const salesOrders = await prisma.salesOrder.findMany({
             where,
             orderBy,
@@ -80,7 +74,6 @@ export const getAllSalesOrders = async (
             },
         })
 
-        // Transform data for the response
         const formattedOrders = salesOrders.map((order) => ({
             ...order,
             itemsCount: order.items.length,
@@ -291,7 +284,6 @@ export const updateSalesOrder = async (
         const { customerId, totalPrice, completionDate, deliveryDate, status } =
             req.body
 
-        // Check if sales order exists
         const existing = await prisma.salesOrder.findUnique({
             where: { id },
             include: {
@@ -303,7 +295,6 @@ export const updateSalesOrder = async (
             return res.status(404).json(errorResponse('Sales order not found'))
         }
 
-        // Check if sales order has production orders and is being completed
         if (status === 'COMPLETED' && existing.spk.length === 0) {
             return res
                 .status(400)
@@ -314,7 +305,6 @@ export const updateSalesOrder = async (
                 )
         }
 
-        // Update the sales order
         const updated = await prisma.salesOrder.update({
             where: { id },
             data: {
@@ -464,7 +454,6 @@ export const deleteSalesOrder = async (
     try {
         const { id } = req.params
 
-        // Check if sales order exists
         const existing = await prisma.salesOrder.findUnique({
             where: { id },
             include: {
@@ -477,7 +466,6 @@ export const deleteSalesOrder = async (
             return res.status(404).json(errorResponse('Sales order not found'))
         }
 
-        // Check for associated production orders or pallets
         if (existing.spk.length > 0) {
             return res.status(400).json(
                 errorResponse(
@@ -506,7 +494,6 @@ export const deleteSalesOrder = async (
             )
         }
 
-        // Delete the sales order (items are deleted through cascade)
         await prisma.salesOrder.delete({ where: { id } })
 
         return res.json(
@@ -552,13 +539,11 @@ export const getSalesOrderProgress = async (
             return res.status(404).json(errorResponse('Sales order not found'))
         }
 
-        // Calculate progress percentages
         const totalItemsOrdered = salesOrder.items.reduce(
             (sum, item) => sum + item.actualQuantity,
             0,
         )
 
-        // Production progress
         const phases = salesOrder.spk.flatMap((spk) => spk.phases)
         const phaseProgress = {
             preprocess: {
@@ -611,14 +596,12 @@ export const getSalesOrderProgress = async (
                   )
                 : 0
 
-        // Overall production progress
         const overallProductionProgress =
             (phaseProgress.preprocess.percentage +
                 phaseProgress.process.percentage +
                 phaseProgress.finishing.percentage) /
             3
 
-        // Packing progress
         const itemsPacked = salesOrder.pallets.reduce(
             (sum, pallet) =>
                 sum +
@@ -631,7 +614,6 @@ export const getSalesOrderProgress = async (
                 ? Math.round((itemsPacked / totalItemsOrdered) * 100)
                 : 0
 
-        // Overall sales order progress
         const overallProgress = Math.round(
             overallProductionProgress * 0.7 + packingProgress * 0.3,
         )
@@ -671,3 +653,4 @@ export default {
     deleteSalesOrder,
     getSalesOrderProgress,
 }
+

@@ -47,6 +47,16 @@ export enum ProductionReportTag {
     BELOW_TARGET = 'BELOW_TARGET',
     FULL_PLANNED = 'FULL_PLANNED',
     ABOVE_TARGET = 'ABOVE_TARGET',
+    PALLET_CREATED = 'PALLET_CREATED',
+}
+
+export enum MutationType {
+    ADD_STOCK = 'ADD_STOCK',
+    REDUCE_STOCK = 'REDUCE_STOCK',
+    PRODUCTION = 'PRODUCTION',
+    DELIVERY = 'DELIVERY',
+    TRANSFER = 'TRANSFER',
+    ADJUSTMENT = 'ADJUSTMENT',
 }
 
 export interface User {
@@ -92,7 +102,7 @@ export interface SalesOrder {
     completionDate: Date;
     deliveryDate?: Date | null;
     status: OrderStatus;
-    maxQuantityPerPallet: number; // New field
+    maxQuantityPerPallet: number;
     customerId: string;
     customer?: Customer;
     createdAt: Date;
@@ -199,7 +209,7 @@ export interface Item {
     storageItems?: Storage[];
     inputItemRelations?: SPK_InputItem[];
     outputItems?: SPK_Item[];
-    pallets?: Pallet[]; // New field
+    pallets?: Pallet[];
 }
 
 export interface SalesOrderItem {
@@ -244,12 +254,12 @@ export interface Pallet {
     code: string;
     status: PalletStatus;
     qrCodeData?: string | null;
-    currentQuantity: number; // New field
-    maxQuantity: number; // New field
+    currentQuantity: number;
+    maxQuantity: number;
     salesOrderId: string;
     salesOrder?: SalesOrder;
-    itemId: string; // New field
-    item?: Item; // New field
+    itemId: string;
+    item?: Item;
     deliveryOrderId?: string | null;
     deliveryOrder?: DeliveryOrder | null;
     createdAt: Date;
@@ -300,3 +310,4 @@ export interface ProductionReport {
     createdAt: Date;
     updatedAt: Date;
 }
+

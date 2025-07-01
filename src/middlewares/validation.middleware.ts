@@ -4,7 +4,6 @@ import { BaseApiType } from '../types/baseApiType'
 
 export const validate = (validations: ValidationChain[]) => {
     return async (req: Request, res: Response, next: NextFunction) => {
-        // Run all validations
         await Promise.all(validations.map((validation) => validation.run(req)))
 
         const errors = validationResult(req)
@@ -31,3 +30,4 @@ export const validate = (validations: ValidationChain[]) => {
         res.status(400).json(response)
     }
 }
+

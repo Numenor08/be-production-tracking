@@ -2,7 +2,6 @@ import e, { Request, Response, NextFunction } from 'express'
 import { PrismaClient, UserRole } from '../../generated/prisma'
 import { errorResponse } from '../utils/api.utils'
 
-// Extend Request interface to include user and session
 declare module 'express-session' {
     interface SessionData {
         user?: {
@@ -18,7 +17,6 @@ declare module 'express-session' {
 
 const prisma = new PrismaClient()
 
-// Middleware to check if user is authenticated
 export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         if (!req.session.user) {
@@ -26,7 +24,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
             return
         }
 
-        // Verify user still exists and is active
         const user = await prisma.user.findUnique({
             where: { id: req.session.user.id },
         })
@@ -48,7 +45,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     }
 }
 
-// Middleware to check if user is admin
 export const requireAdmin = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
         if (!req.session.user) {
@@ -68,7 +64,6 @@ export const requireAdmin = async (req: Request, res: Response, next: NextFuncti
     }
 }
 
-// Middleware to check if user can access their own data or is admin
 export const requireOwnershipOrAdmin = (userIdParam: string = 'id') => {
     return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
@@ -81,7 +76,6 @@ export const requireOwnershipOrAdmin = (userIdParam: string = 'id') => {
             const currentUserId = req.session.user.id
             const currentUserRole = req.session.user.role
 
-            // Allow if user is admin or accessing their own data
             if (currentUserRole === 'ADMIN' || currentUserId === targetUserId) {
                 next()
                 return
@@ -95,7 +89,6 @@ export const requireOwnershipOrAdmin = (userIdParam: string = 'id') => {
     }
 }
 
-// Middleware to check if user is already authenticated (for login routes)
 export const requireGuest = (req: Request, res: Response, next: NextFunction): void => {
     if (req.session.user) {
         res.status(400).json(errorResponse('You are already logged in'))
@@ -103,3 +96,4 @@ export const requireGuest = (req: Request, res: Response, next: NextFunction): v
     }
     next()
 }
+

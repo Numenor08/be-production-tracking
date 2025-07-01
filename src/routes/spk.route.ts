@@ -53,7 +53,6 @@ router.delete(
     spkController.deleteSPKPhase,
 )
 
-// Add the new route for creating SPK items
 router.post(
     '/:id/items',
     validate(createSPKItemValidation),
@@ -61,3 +60,4 @@ router.post(
 )
 
 export default router
+

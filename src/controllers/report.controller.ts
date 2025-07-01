@@ -4,9 +4,11 @@ import {
     ProcessStage,
     ProductionReport,
     ProductionReportTag,
+    ItemType,
 } from '../types/types'
 import { successResponse, errorResponse } from '../utils/api.utils'
 import { generateReportCode } from '../libs/generate'
+import { recordProductionMutation, recordReduceStockMutation } from '../utils/stockMutation.utils'
 
 const prisma = new PrismaClient()
 
@@ -22,8 +24,11 @@ export async function createProductionReport(
     confirmedByUserId?: string,
     notes?: string,
     date: Date = new Date(),
+    storageOperations?: {
+        itemsAdded?: Array<{ itemId: string; storageId: string; quantity: number; quantityBefore: number }>
+        itemsUsed?: Array<{ itemId: string; storageId: string; quantity: number; quantityBefore: number }>
+    }
 ): Promise<ProductionReport> {
-    // 1. Get the SPK item to access target quantities
     const spkItem = await prisma.sPK_Item.findUnique({
         where: { id: spkItemId },
         select: {
@@ -36,18 +41,14 @@ export async function createProductionReport(
         throw new Error(`SPK item with ID ${spkItemId} not found`)
     }
 
-    // 2. Generate a unique code for the report
     const reportCode = await generateReportCode(spkId, stage)
 
-    // 3. Calculate metrics for determining tags
     const targetQuantity = spkItem.targetOutputQuantity
     const totalActual = actualQuantity + wasteQuantity
     const differenceToTarget = totalActual - targetQuantity
 
-    // 4. Determine appropriate tags based on conditions
     const tags: ProductionReportTag[] = []
 
-    // Assign tags based on production metrics
     if (storageUsed > 0) {
         tags.push(ProductionReportTag.STORAGE_USED)
     }
@@ -69,7 +70,24 @@ export async function createProductionReport(
         tags.push(ProductionReportTag.FULL_PLANNED)
     }
 
-    // 5. Create the production report
+    if (stage === ProcessStage.FINISHING && actualQuantity > 0) {
+        const spkItemWithOutput = await prisma.sPK_Item.findUnique({
+            where: { id: spkItemId },
+            include: {
+                outputItem: {
+                    select: {
+                        type: true,
+                    },
+                },
+            },
+        })
+
+        if (spkItemWithOutput?.outputItem?.type === ItemType.PRODUCT || 
+            spkItemWithOutput?.outputItem?.type === ItemType.SEMI_FINISHED) {
+            tags.push(ProductionReportTag.PALLET_CREATED)
+        }
+    }
+
     const productionReport = await prisma.productionReport.create({
         data: {
             code: reportCode,
@@ -91,10 +109,54 @@ export async function createProductionReport(
             wasteQuantity,
             totalStorageUsed: storageUsed,
             notes,
-            tags: JSON.stringify(tags), // Store as JSON string since Prisma expects this for Json fields
+            tags: JSON.stringify(tags),
             differenceToTarget,
         },
     })
+
+    if (storageOperations) {
+        try {
+            if (storageOperations.itemsAdded) {
+                for (const item of storageOperations.itemsAdded) {
+                    await recordProductionMutation(
+                        prisma,
+                        item.itemId,
+                        item.storageId,
+                        item.quantity,
+                        item.quantityBefore,
+                        {
+                            spkId,
+                            productionReportId: productionReport.id,
+                            performedByUserId: confirmedByUserId,
+                            notes: `Production output - ${notes || 'Production completed'}`,
+                            stage,
+                        }
+                    )
+                }
+            }
+
+            if (storageOperations.itemsUsed) {
+                for (const item of storageOperations.itemsUsed) {
+                    await recordReduceStockMutation(
+                        prisma,
+                        item.itemId,
+                        item.storageId,
+                        item.quantity,
+                        item.quantityBefore,
+                        {
+                            spkId,
+                            productionReportId: productionReport.id,
+                            performedByUserId: confirmedByUserId,
+                            notes: `Production input - ${notes || 'Materials used in production'}`,
+                            stage,
+                        }
+                    )
+                }
+            }
+        } catch (mutationError) {
+            console.error('Error recording production stock mutations:', mutationError)
+        }
+    }
 
     return productionReport
 }
@@ -123,10 +185,8 @@ export const getAllProductionReport = async (
             orderBy.createdAt = 'desc'
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.productionReport.count({ where })
 
-        // Calculate pagination values
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
@@ -235,3 +295,4 @@ export default {
     getAllProductionReport,
     getProductionReportById,
 }
+

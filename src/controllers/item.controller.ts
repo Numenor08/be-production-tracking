@@ -11,7 +11,6 @@ export const getAllItems = async (
     res: Response,
 ): Promise<any> => {
     try {
-        // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 50
         const search = req.query.search as string | undefined
@@ -19,9 +18,8 @@ export const getAllItems = async (
         const sortOrder =
             (req.query.sortOrder as 'asc' | 'desc' | undefined) || 'asc'
         const type = req.query.type as ItemType | undefined
-        const includeStock = req.query.includeStock === 'true' // New parameter to control stock inclusion
+        const includeStock = req.query.includeStock === 'true'
 
-        // Build where condition for filtering
         const where: any = {}
         if (search) {
             where.OR = [{ name: { contains: search } }]
@@ -31,7 +29,6 @@ export const getAllItems = async (
             where.type = type
         }
 
-        // Build orderBy for sorting
         const orderBy: any = {}
         if (sortBy) {
             orderBy[sortBy] = sortOrder
@@ -39,14 +36,11 @@ export const getAllItems = async (
             orderBy.createdAt = 'desc'
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.item.count({ where })
 
-        // Calculate pagination values
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch items with pagination
         const items = await prisma.item.findMany({
             where,
             orderBy,
@@ -59,10 +53,8 @@ export const getAllItems = async (
                 : undefined,
         })
 
-        // If includeStock is true, calculate stock information for each item
         let enhancedItems = items
         if (includeStock) {
-            // Get all storage items for the fetched items to calculate total stock
             const itemIds = items.map((item) => item.id)
             const allStorageItems = await prisma.storage.findMany({
                 where: {
@@ -78,7 +70,6 @@ export const getAllItems = async (
                 },
             })
 
-            // Group storage items by itemId
             const stockByItemId: Record<
                 string,
                 {
@@ -95,12 +86,10 @@ export const getAllItems = async (
                 }
             > = {}
 
-            // Process all storage items to calculate stocks
             for (const storageItem of allStorageItems) {
                 const itemId = storageItem.itemId
                 if (!itemId) continue
 
-                // Initialize if not exists
                 if (!stockByItemId[itemId]) {
                     stockByItemId[itemId] = {
                         totalStock: 0,
@@ -109,10 +98,8 @@ export const getAllItems = async (
                     }
                 }
 
-                // Add to total stock
                 stockByItemId[itemId].totalStock += storageItem.stock
 
-                // Group by SPK
                 const spkId = storageItem.spkId || 'unknown'
                 if (!stockByItemId[itemId].spkSources[spkId]) {
                     stockByItemId[itemId].spkSources[spkId] = {
@@ -126,7 +113,6 @@ export const getAllItems = async (
                 stockByItemId[itemId].storageCount += 1
             }
 
-            // Enhance items with stock information
             enhancedItems = items.map((item) => {
                 const stockInfo = stockByItemId[item.id] || {
                     totalStock: 0,
@@ -139,7 +125,7 @@ export const getAllItems = async (
                     totalStock: stockInfo.totalStock,
                     stockSources: Object.values(stockInfo.spkSources),
                     storageCount: stockInfo.storageCount,
-                    storageItems: undefined, // Remove raw storage items to keep response clean
+                    storageItems: undefined,
                 }
             })
         }
@@ -167,7 +153,6 @@ export const getItemById = async (
     try {
         const { id } = req.params
 
-        // Get the base item information
         const item = await prisma.item.findUnique({
             where: { id },
             include: {
@@ -189,7 +174,6 @@ export const getItemById = async (
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Get storage information for this item
         const storageItems = await prisma.storage.findMany({
             where: { itemId: id },
             include: {
@@ -208,13 +192,11 @@ export const getItemById = async (
             },
         })
 
-        // Calculate total stock
         const totalStock = storageItems.reduce(
             (sum, item) => sum + item.stock,
             0,
         )
 
-        // Group stock by production order (SPK)
         const stockBySPK = storageItems.reduce((acc: any, item) => {
             const spkId = item.spkId || 'unknown'
 
@@ -232,7 +214,6 @@ export const getItemById = async (
             return acc
         }, {})
 
-        // Group by spk stage
         const stockByStage = storageItems.reduce((acc: any, item) => {
             const stage = item.spkStage || 'unknown'
 
@@ -247,7 +228,6 @@ export const getItemById = async (
             return acc
         }, {})
 
-        // Create enhanced item with stock information
         const enhancedItem = {
             ...item,
             stockInfo: {
@@ -267,7 +247,6 @@ export const getItemById = async (
     }
 }
 
-// Rest of your existing functions...
 
 export const createItem = async (req: Request, res: Response): Promise<any> => {
     try {
@@ -286,7 +265,6 @@ export const createItem = async (req: Request, res: Response): Promise<any> => {
                 )
         }
         
-        // Check if Name is exist
         const existingItem = await prisma.item.findFirst({
             where: { name, type: type as ItemType },
         })
@@ -361,13 +339,11 @@ export const deleteItem = async (req: Request, res: Response): Promise<any> => {
     try {
         const { id } = req.params
 
-        // Check if item exists
         const existing = await prisma.item.findUnique({ where: { id } })
         if (!existing) {
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Check if item is being used
         const usedInStorage = await prisma.storage.findFirst({
             where: { itemId: id },
         })
@@ -393,7 +369,6 @@ export const deleteItem = async (req: Request, res: Response): Promise<any> => {
                 )
         }
 
-        // Delete item
         await prisma.item.delete({ where: { id } })
 
         return res.json(successResponse(null, 'Item deleted successfully'))
@@ -410,13 +385,11 @@ export const getItemStock = async (
     try {
         const { id } = req.params
 
-        // Check if item exists
         const existing = await prisma.item.findUnique({ where: { id } })
         if (!existing) {
             return res.status(404).json(errorResponse('Item not found'))
         }
 
-        // Get item storage information
         const storageItems = await prisma.storage.findMany({
             where: { itemId: id },
             include: {
@@ -429,13 +402,11 @@ export const getItemStock = async (
             },
         })
 
-        // Calculate totals
         const totalStock = storageItems.reduce(
             (sum, item) => sum + item.stock,
             0,
         )
 
-        // Group by production order
         const stockBySource = storageItems.reduce((acc: any, item) => {
             const source = item.spkId || 'unknown'
             if (!acc[source]) {
@@ -477,3 +448,4 @@ export default {
     deleteItem,
     getItemStock,
 }
+

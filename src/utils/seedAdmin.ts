@@ -5,7 +5,6 @@ const prisma = new PrismaClient()
 
 const seedAdminUser = async () => {
     try {
-        // Check if admin user already exists
         const existingAdmin = await prisma.user.findFirst({
             where: { role: 'ADMIN' },
         })
@@ -16,11 +15,9 @@ const seedAdminUser = async () => {
             return
         }
 
-        // Hash password for admin
         const saltRounds = 12
         const hashedPassword = await bcrypt.hash('Admin123!', saltRounds)
 
-        // Create admin user
         const adminUser = await prisma.user.create({
             data: {
                 username: 'admin',
@@ -57,9 +54,9 @@ const seedAdminUser = async () => {
     }
 }
 
-// Run seeder if called directly
 if (require.main === module) {
     seedAdminUser()
 }
 
 export { seedAdminUser }
+

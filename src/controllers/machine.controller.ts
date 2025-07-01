@@ -6,13 +6,11 @@ import { generateMachineCode } from '../libs/generate'
 
 const prisma = new PrismaClient()
 
-// Get all machines with pagination and filtering
 export const getAllMachines = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
-        // Parse query parameters (validated by middleware)
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 30
         const search = req.query.search as string | undefined
@@ -21,7 +19,6 @@ export const getAllMachines = async (
             (req.query.sortOrder as 'asc' | 'desc' | undefined) || 'asc'
         const type = req.query.type as ProcessStage | undefined
 
-        // Build where condition for filtering
         const where: any = {}
         if (search) {
             where.OR = [
@@ -34,7 +31,6 @@ export const getAllMachines = async (
             where.type = type
         }
 
-        // Build orderBy for sorting
         const orderBy: any = {}
         if (sortBy) {
             orderBy[sortBy] = sortOrder
@@ -42,14 +38,11 @@ export const getAllMachines = async (
             orderBy.createdAt = 'desc'
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.machine.count({ where })
 
-        // Calculate pagination values
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch machines with pagination and relation data
         const machines = await prisma.machine.findMany({
             where,
             orderBy,
@@ -57,7 +50,6 @@ export const getAllMachines = async (
             take: limit,
         })
 
-        // Format response using utility
         res.json(
             successResponse(machines, 'Machines retrieved successfully', {
                 pagination: {
@@ -74,7 +66,6 @@ export const getAllMachines = async (
     }
 }
 
-// Get machine by ID
 export const getMachineById = async (
     req: Request,
     res: Response,
@@ -103,7 +94,6 @@ export const getMachineById = async (
     }
 }
 
-// Create new machine
 export const createMachine = async (
     req: Request,
     res: Response,
@@ -140,7 +130,6 @@ export const createMachine = async (
     }
 }
 
-// Update machine
 export const updateMachine = async (
     req: Request,
     res: Response,
@@ -149,7 +138,6 @@ export const updateMachine = async (
         const { id } = req.params
         const { name, details, type } = req.body
 
-        // Validate name exists
         const nameExists = await prisma.machine.findFirst({
             where: { name, id: { not: id } },
         })
@@ -160,13 +148,11 @@ export const updateMachine = async (
             )
         }
         
-        // Check if machine exists
         const existing = await prisma.machine.findUnique({ where: { id } })
         if (!existing) {
             return res.status(404).json(errorResponse('Machine not found'))
         }
 
-        // Update machine
         const updated = await prisma.machine.update({
             where: { id },
             data: {
@@ -183,7 +169,6 @@ export const updateMachine = async (
     }
 }
 
-// Delete machine
 export const deleteMachine = async (
     req: Request,
     res: Response,
@@ -191,13 +176,11 @@ export const deleteMachine = async (
     try {
         const { id } = req.params
 
-        // Check if machine exists
         const existing = await prisma.machine.findUnique({ where: { id } })
         if (!existing) {
             return res.status(404).json(errorResponse('Machine not found'))
         }
 
-        // Check if machine is being used by any production order
         const usedByProductionOrder = await prisma.sPK.findFirst({
             where: {
                 OR: [
@@ -220,7 +203,6 @@ export const deleteMachine = async (
             )
         }
 
-        // Delete machine
         await prisma.machine.delete({ where: { id } })
 
         res.json(successResponse(null, 'Machine deleted successfully'))
@@ -230,7 +212,6 @@ export const deleteMachine = async (
     }
 }
 
-// Get machine usage statistics
 export const getMachineStats = async (
     req: Request,
     res: Response,
@@ -238,13 +219,11 @@ export const getMachineStats = async (
     try {
         const { id } = req.params
 
-        // Check if machine exists
         const existing = await prisma.machine.findUnique({ where: { id } })
         if (!existing) {
             return res.status(404).json(errorResponse('Machine not found'))
         }
 
-        // Get machine history
         const history = await prisma.machineHistory.findMany({
             where: { machineId: id },
             include: {
@@ -255,7 +234,6 @@ export const getMachineStats = async (
             },
         })
 
-        // Get production orders
         const productionOrders = await prisma.sPK.findMany({
             where: {
                 OR: [
@@ -277,7 +255,6 @@ export const getMachineStats = async (
             },
         })
 
-        // Calculate statistics
         const totalJobs = history.length
 
         const statsData = {
@@ -312,7 +289,6 @@ export const getMachineHistory = async (
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 10
 
-        // Check if machine exists
         const machine = await prisma.machine.findUnique({
             where: { id },
         })
@@ -321,7 +297,6 @@ export const getMachineHistory = async (
             return res.status(404).json(errorResponse('Machine not found'))
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.machineHistory.count({
             where: { machineId: id },
         })
@@ -329,7 +304,6 @@ export const getMachineHistory = async (
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch machine history with related data
         const history = await prisma.machineHistory.findMany({
             where: { machineId: id },
             skip,
@@ -378,3 +352,4 @@ export default {
     getMachineStats,
     getMachineHistory,
 }
+

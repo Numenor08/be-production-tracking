@@ -11,3 +11,4 @@ export const getAllProductionReportValidation = [
 export const getProductionReportByIdValidation = [
     param('id').isString().withMessage('Report ID must be a string'),
 ]
+

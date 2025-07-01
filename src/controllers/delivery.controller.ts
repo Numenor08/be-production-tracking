@@ -6,7 +6,6 @@ import { DeliveryStatus, PalletStatus } from '../types/types'
 
 const prisma = new PrismaClient()
 
-// Get all delivery orders with pagination and filtering
 export const getAllDeliveryOrders = async (
     req: Request,
     res: Response,
@@ -17,7 +16,6 @@ export const getAllDeliveryOrders = async (
         const search = req.query.search as string | undefined
         const status = req.query.status as DeliveryStatus | undefined
 
-        // Build where condition for filtering
         const where: any = {}
 
         if (search) {
@@ -33,12 +31,10 @@ export const getAllDeliveryOrders = async (
             where.status = status
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.deliveryOrder.count({ where })
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch delivery orders with pagination and related data
         const deliveryOrders = await prisma.deliveryOrder.findMany({
             where,
             skip,
@@ -85,7 +81,6 @@ export const getAllDeliveryOrders = async (
             },
         })
 
-        // Calculate totals for each delivery order
         const deliveryOrdersWithTotals = deliveryOrders.map((delivery) => {
             const totalPallets = delivery.pallets.length
             const totalItems = delivery.pallets.reduce(
@@ -124,7 +119,6 @@ export const getAllDeliveryOrders = async (
     }
 }
 
-// Get delivery order by ID
 export const getDeliveryOrderById = async (
     req: Request,
     res: Response,
@@ -173,7 +167,6 @@ export const getDeliveryOrderById = async (
                 .json(errorResponse('Delivery order not found'))
         }
 
-        // Calculate totals
         const totalPallets = deliveryOrder.pallets.length
         const totalItems = deliveryOrder.pallets.reduce(
             (sum: number, pallet: any) => {
@@ -199,7 +192,6 @@ export const getDeliveryOrderById = async (
     }
 }
 
-// Create new delivery order from completed sales order
 export const createDeliveryOrder = async (
     req: Request,
     res: Response,
@@ -207,7 +199,6 @@ export const createDeliveryOrder = async (
     try {
         const { salesOrderId, deliveryDate, notes } = req.body
 
-        // Check if sales order exists and is completed
         const salesOrder = await prisma.salesOrder.findUnique({
             where: { id: salesOrderId },
             include: {
@@ -254,12 +245,9 @@ export const createDeliveryOrder = async (
                 )
         }
 
-        // Generate unique delivery order code
         const code = await generateDeliveryCode()
 
-        // Create delivery order with transaction
         const deliveryOrder = await prisma.$transaction(async (tx) => {
-            // Create delivery order
             const newDeliveryOrder = await tx.deliveryOrder.create({
                 data: {
                     code,
@@ -277,7 +265,6 @@ export const createDeliveryOrder = async (
                 },
             })
 
-            // Update all ready pallets to be assigned to this delivery order
             await tx.pallet.updateMany({
                 where: {
                     salesOrderId,
@@ -305,7 +292,6 @@ export const createDeliveryOrder = async (
     }
 }
 
-// Update delivery order status
 export const updateDeliveryOrderStatus = async (
     req: Request,
     res: Response,
@@ -328,9 +314,7 @@ export const updateDeliveryOrderStatus = async (
                 .json(errorResponse('Delivery order not found'))
         }
 
-        // Use transaction to update delivery order and related data
         const updatedDeliveryOrder = await prisma.$transaction(async (tx) => {
-            // Update delivery order
             const updated = await tx.deliveryOrder.update({
                 where: { id },
                 data: {
@@ -348,9 +332,7 @@ export const updateDeliveryOrderStatus = async (
                 },
             })
 
-            // If status is DELIVERED, update pallets and sales order
             if (status === DeliveryStatus.DELIVERED) {
-                // Update all pallets in this delivery to SHIPPED
                 await tx.pallet.updateMany({
                     where: {
                         deliveryOrderId: id,
@@ -360,7 +342,6 @@ export const updateDeliveryOrderStatus = async (
                     },
                 })
 
-                // Update sales order status to DELIVERED
                 await tx.salesOrder.update({
                     where: { id: deliveryOrder.salesOrderId },
                     data: {
@@ -386,7 +367,6 @@ export const updateDeliveryOrderStatus = async (
     }
 }
 
-// Update delivery order details
 export const updateDeliveryOrder = async (
     req: Request,
     res: Response,
@@ -450,7 +430,6 @@ export const updateDeliveryOrder = async (
     }
 }
 
-// Delete delivery order (only if not delivered)
 export const deleteDeliveryOrder = async (
     req: Request,
     res: Response,
@@ -481,9 +460,7 @@ export const deleteDeliveryOrder = async (
                 )
         }
 
-        // Use transaction to delete delivery order and update pallets
         await prisma.$transaction(async (tx) => {
-            // Remove delivery order assignment from pallets
             await tx.pallet.updateMany({
                 where: {
                     deliveryOrderId: id,
@@ -493,7 +470,6 @@ export const deleteDeliveryOrder = async (
                 },
             })
 
-            // Delete delivery order
             await tx.deliveryOrder.delete({
                 where: { id },
             })
@@ -510,7 +486,6 @@ export const deleteDeliveryOrder = async (
     }
 }
 
-// Start delivery (change status to IN_TRANSIT)
 export const startDelivery = async (
     req: Request,
     res: Response,
@@ -579,3 +554,4 @@ export default {
     deleteDeliveryOrder,
     startDelivery,
 }
+

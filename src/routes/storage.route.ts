@@ -50,9 +50,9 @@ router.put(
     storageController.reduceStockByItem
 )
 
-// Routes for stock transactions
 router.post('/transfer', storageController.transferStock)
 router.get('/by-item/:itemId', storageController.getStorageByItem)
 router.get('/by-spk/:spkId', storageController.getStorageBySPK)
 
 export default router
+

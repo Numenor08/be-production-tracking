@@ -4,13 +4,11 @@ import { successResponse, errorResponse } from '../utils/api.utils'
 
 const prisma = new PrismaClient()
 
-// Get all customers with pagination and filtering
 export const getAllCustomers = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
-        // Parse query parameters
         const page = Number(req.query.page) || 1
         const limit = Number(req.query.limit) || 25
         const search = req.query.search as string | undefined
@@ -18,7 +16,6 @@ export const getAllCustomers = async (
         const sortOrder =
             (req.query.sortOrder as 'asc' | 'desc' | undefined) || 'asc'
 
-        // Build where condition for filtering
         const where: any = {}
         if (search) {
             where.OR = [
@@ -31,7 +28,6 @@ export const getAllCustomers = async (
             ]
         }
 
-        // Build orderBy for sorting
         const orderBy: any = {}
         if (sortBy) {
             orderBy[sortBy] = sortOrder
@@ -39,14 +35,11 @@ export const getAllCustomers = async (
             orderBy.name = 'asc'
         }
 
-        // Get total count for pagination
         const totalCount = await prisma.customer.count({ where })
 
-        // Calculate pagination values
         const totalPages = Math.ceil(totalCount / limit)
         const skip = (page - 1) * limit
 
-        // Fetch customers with pagination
         const customers = await prisma.customer.findMany({
             where,
             orderBy,
@@ -61,7 +54,6 @@ export const getAllCustomers = async (
             },
         })
 
-        // Add order counts to each customer
         const enhancedCustomers = customers.map((customer) => ({
             ...customer,
             salesOrderCount: customer._count.salesOrders,
@@ -90,7 +82,6 @@ export const getAllCustomers = async (
     }
 }
 
-// Get customer by ID with detailed information
 export const getCustomerById = async (
     req: Request,
     res: Response,
@@ -133,7 +124,6 @@ export const getCustomerById = async (
     }
 }
 
-// Create a new customer
 export const createCustomer = async (
     req: Request,
     res: Response,
@@ -141,7 +131,6 @@ export const createCustomer = async (
     try {
         const { name, address, phone, email, contactPerson } = req.body
 
-        // Create new customer
         const customer = await prisma.customer.create({
             data: {
                 name,
@@ -161,7 +150,6 @@ export const createCustomer = async (
     }
 }
 
-// Update an existing customer
 export const updateCustomer = async (
     req: Request,
     res: Response,
@@ -170,7 +158,6 @@ export const updateCustomer = async (
         const { id } = req.params
         const { name, address, phone, email, contactPerson } = req.body
 
-        // Check if customer exists
         const existingCustomer = await prisma.customer.findUnique({
             where: { id },
         })
@@ -179,7 +166,6 @@ export const updateCustomer = async (
             return res.status(404).json(errorResponse('Customer not found'))
         }
 
-        // Update customer
         const updatedCustomer = await prisma.customer.update({
             where: { id },
             data: {
@@ -201,7 +187,6 @@ export const updateCustomer = async (
     }
 }
 
-// Delete a customer
 export const deleteCustomer = async (
     req: Request,
     res: Response,
@@ -209,7 +194,6 @@ export const deleteCustomer = async (
     try {
         const { id } = req.params
 
-        // Check if customer exists
         const existingCustomer = await prisma.customer.findUnique({
             where: { id },
             include: {
@@ -221,7 +205,6 @@ export const deleteCustomer = async (
             return res.status(404).json(errorResponse('Customer not found'))
         }
 
-        // Check if customer has associated orders
         if (existingCustomer.salesOrders.length > 0) {
             return res.status(400).json(
                 errorResponse('Cannot delete customer with associated orders', {
@@ -230,7 +213,6 @@ export const deleteCustomer = async (
             )
         }
 
-        // Delete customer
         await prisma.customer.delete({
             where: { id },
         })
@@ -242,16 +224,13 @@ export const deleteCustomer = async (
     }
 }
 
-// Get customer statistics
 export const getCustomerStatistics = async (
     req: Request,
     res: Response,
 ): Promise<any> => {
     try {
-        // Get total customer count
         const totalCustomers = await prisma.customer.count()
 
-        // Get customers with orders
         const customersWithOrders = await prisma.customer.count({
             where: {
                 salesOrders: {
@@ -260,16 +239,7 @@ export const getCustomerStatistics = async (
             },
         })
 
-        // Get customers with deliveries
-        // const customersWithDeliveries = await prisma.customer.count({
-        //     where: {
-        //         deliveryOrders: {
-        //             some: {},
-        //         },
-        //     },
-        // })
 
-        // Get top customers by sales order count
         const topCustomersByOrderCount = await prisma.customer.findMany({
             take: 5,
             orderBy: {
@@ -286,11 +256,9 @@ export const getCustomerStatistics = async (
             },
         })
 
-        // Format the results
         const statistics = {
             totalCustomers,
             customersWithOrders,
-            // customersWithDeliveries,
             topCustomers: topCustomersByOrderCount.map((c) => ({
                 id: c.id,
                 name: c.name,
@@ -320,3 +288,4 @@ export default {
     deleteCustomer,
     getCustomerStatistics,
 }
+

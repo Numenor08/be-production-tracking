@@ -18,12 +18,10 @@ interface AuthRequest extends Request {
     }
 }
 
-// Register new user
 export const register = async (req: Request, res: Response): Promise<void> => {
     try {
         const { username, password, confirmPassword, firstName, lastName, email, phone, role } = req.body
 
-        // Check if user already exists
         const existingUser = await prisma.user.findFirst({
             where: {
                 OR: [
@@ -38,11 +36,9 @@ export const register = async (req: Request, res: Response): Promise<void> => {
             return
         }
 
-        // Hash password
         const saltRounds = 12
         const hashedPassword = await bcrypt.hash(password, saltRounds)
 
-        // Create user
         const newUser = await prisma.user.create({
             data: {
                 username,
@@ -74,12 +70,10 @@ export const register = async (req: Request, res: Response): Promise<void> => {
     }
 }
 
-// Login user
 export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { username, password } = req.body
 
-        // Find user by username
         const user = await prisma.user.findUnique({
             where: { username },
         })
@@ -89,20 +83,17 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
             return
         }
 
-        // Check if user is active
         if (!user.isActive) {
             res.status(403).json(errorResponse('Account is deactivated. Please contact administrator.'))
             return
         }
 
-        // Verify password
         const isPasswordValid = await bcrypt.compare(password, user.password)
         if (!isPasswordValid) {
             res.status(401).json(errorResponse('Invalid credentials'))
             return
         }
 
-        // Create session
         req.session.user = {
             id: user.id,
             username: user.username,
@@ -128,7 +119,6 @@ export const login = async (req: AuthRequest, res: Response): Promise<void> => {
     }
 }
 
-// Logout user
 export const logout = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         req.session.destroy((err) => {
@@ -138,7 +128,7 @@ export const logout = async (req: AuthRequest, res: Response): Promise<void> => 
                 return
             }
 
-            res.clearCookie('sessionId') // Custom session cookie name
+            res.clearCookie('sessionId')
             res.status(200).json(successResponse(null, 'Logout successful'))
         })
     } catch (error) {
@@ -147,7 +137,6 @@ export const logout = async (req: AuthRequest, res: Response): Promise<void> => 
     }
 }
 
-// Get current user profile
 export const getProfile = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const user = await prisma.user.findUnique({
@@ -178,13 +167,11 @@ export const getProfile = async (req: AuthRequest, res: Response): Promise<void>
     }
 }
 
-// Update user profile
 export const updateProfile = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const userId = req.params.id || req.session.user!.id
         const { firstName, lastName, email, phone } = req.body
 
-        // Check if email is already taken by another user
         if (email) {
             const existingUser = await prisma.user.findFirst({
                 where: {
@@ -220,7 +207,6 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
             },
         })
 
-        // Update session if user updated their own profile
         if (userId === req.session.user!.id) {
             req.session.user = {
                 ...req.session.user!,
@@ -237,13 +223,11 @@ export const updateProfile = async (req: AuthRequest, res: Response): Promise<vo
     }
 }
 
-// Change password
 export const changePassword = async (req: AuthRequest, res: Response): Promise<void> => {
     try {
         const { currentPassword, newPassword } = req.body
         const userId = req.session.user!.id
 
-        // Get current user
         const user = await prisma.user.findUnique({
             where: { id: userId },
         })
@@ -253,18 +237,15 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
             return
         }
 
-        // Verify current password
         const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.password)
         if (!isCurrentPasswordValid) {
             res.status(401).json(errorResponse('Current password is incorrect'))
             return
         }
 
-        // Hash new password
         const saltRounds = 12
         const hashedNewPassword = await bcrypt.hash(newPassword, saltRounds)
 
-        // Update password
         await prisma.user.update({
             where: { id: userId },
             data: { password: hashedNewPassword },
@@ -277,7 +258,6 @@ export const changePassword = async (req: AuthRequest, res: Response): Promise<v
     }
 }
 
-// Get all users (Admin only)
 export const getAllUsers = async (req: Request, res: Response): Promise<void> => {
     try {
         const users = await prisma.user.findMany({
@@ -303,13 +283,11 @@ export const getAllUsers = async (req: Request, res: Response): Promise<void> =>
     }
 }
 
-// Update user by admin
 export const updateUserByAdmin = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params
         const { firstName, lastName, email, phone, isActive, role } = req.body
 
-        // Check if email is already taken by another user
         if (email) {
             const existingUser = await prisma.user.findFirst({
                 where: {
@@ -354,7 +332,6 @@ export const updateUserByAdmin = async (req: Request, res: Response): Promise<vo
     }
 }
 
-// Get user by ID
 export const getUserById = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params
@@ -398,3 +375,4 @@ export default {
     updateUserByAdmin,
     getUserById,
 }
+

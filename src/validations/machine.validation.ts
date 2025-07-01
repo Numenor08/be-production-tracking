@@ -75,3 +75,4 @@ export const paginationValidation = [
 export const machineIdValidation = [
     param('id').notEmpty().withMessage('Machine ID is required'),
 ]
+

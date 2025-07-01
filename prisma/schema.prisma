@@ -57,6 +57,24 @@ enum UserRole {
   OPERATOR
 }
 
+enum ProductionReportTag {
+  STORAGE_USED
+  WASTE_USED
+  BELOW_TARGET
+  FULL_PLANNED
+  ABOVE_TARGET
+  PALLET_CREATED
+}
+
+enum MutationType {
+  ADD_STOCK      // Penambahan stok
+  REDUCE_STOCK   // Pengurangan stok
+  PRODUCTION     // Hasil produksi
+  DELIVERY       // Pengiriman/surat jalan
+  TRANSFER       // Transfer antar storage
+  ADJUSTMENT     // Penyesuaian stok
+}
+
 model User {
   id        String   @id @default(cuid())
   username  String   @unique
@@ -68,6 +86,7 @@ model User {
   isActive  Boolean @default(true)
   role      UserRole @default(OPERATOR)
   report    ProductionReport[]
+  stockMutations StockMutation[] @relation(name: "StockMutationToUser")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -118,6 +137,7 @@ model SalesOrder {
   spk            SPK[]
   pallets        Pallet[]
   deliveryOrders DeliveryOrder?
+  stockMutations StockMutation[] @relation(name: "StockMutationToSalesOrder")
 }
 
 model SPK {
@@ -150,6 +170,7 @@ model SPK {
   machineHistory MachineHistory[]
   spkItems       SPK_Item[]
   phases         SPK_Phase[]
+  stockMutations StockMutation[] @relation(name: "StockMutationToSPK")
 }
 
 model SPK_Phase {
@@ -240,6 +261,7 @@ model Storage {
   updatedAt DateTime @updatedAt
 
   palletItems PalletItem[]
+  stockMutations StockMutation[] @relation(name: "StockMutationToStorage")
 
   @@unique([spkId, itemId])
 }
@@ -259,6 +281,7 @@ model Item {
   inputItemRelations SPK_InputItem[] 
   outputItems  SPK_Item[]   @relation("OutputItem")
   pallets      Pallet[]     // Pallets that contain this item
+  stockMutations StockMutation[] @relation(name: "StockMutationToItem")
 }
 
 model SalesOrderItem {
@@ -329,6 +352,7 @@ model Pallet {
   deliveryOrderId String?
   deliveryOrder   DeliveryOrder? @relation(fields: [deliveryOrderId], references: [id], onDelete: SetNull)
   items              PalletItem[]
+  stockMutations     StockMutation[] @relation(name: "StockMutationToPallet")
 }
 
 model PalletItem {
@@ -359,14 +383,55 @@ model DeliveryOrder {
   updatedAt DateTime @updatedAt
 
   pallets Pallet[]
+  stockMutations StockMutation[] @relation(name: "StockMutationToDeliveryOrder")
 }
 
-enum ProductionReportTag {
-  STORAGE_USED
-  WASTE_USED
-  BELOW_TARGET
-  FULL_PLANNED
-  ABOVE_TARGET
+model StockMutation {
+  id          String   @id @default(cuid())
+  code        String   @unique
+  
+  // Type of mutation
+  type        MutationType
+  
+  // Item information
+  itemId      String
+  item        Item     @relation(name: "StockMutationToItem", fields: [itemId], references: [id], onDelete: Cascade)
+  
+  // Storage information
+  storageId   String?
+  storage     Storage? @relation(name: "StockMutationToStorage", fields: [storageId], references: [id], onDelete: SetNull)
+  
+  // Mutation details
+  quantityBefore  Int     // Stok sebelum mutasi
+  quantityChange  Int     // Perubahan (+/-)
+  quantityAfter   Int     // Stok setelah mutasi
+  
+  // Reference information
+  spkId           String?
+  spk             SPK?    @relation(name: "StockMutationToSPK", fields: [spkId], references: [id], onDelete: SetNull)
+  
+  salesOrderId    String?
+  salesOrder      SalesOrder? @relation(name: "StockMutationToSalesOrder", fields: [salesOrderId], references: [id], onDelete: SetNull)
+  
+  deliveryOrderId String?
+  deliveryOrder   DeliveryOrder? @relation(name: "StockMutationToDeliveryOrder", fields: [deliveryOrderId], references: [id], onDelete: SetNull)
+  
+  palletId        String?
+  pallet          Pallet? @relation(name: "StockMutationToPallet", fields: [palletId], references: [id], onDelete: SetNull)
+  
+  productionReportId String?
+  productionReport   ProductionReport? @relation(name: "StockMutationToProductionReport", fields: [productionReportId], references: [id], onDelete: SetNull)
+  
+  // User who performed the action
+  performedByUserId String?
+  performedByUser   User?    @relation(name: "StockMutationToUser", fields: [performedByUserId], references: [id], onDelete: SetNull)
+  
+  // Additional information
+  notes       String?
+  stage       ProcessStage?
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model ProductionReport {
@@ -401,6 +466,8 @@ model ProductionReport {
   
   // Computation results
   differenceToTarget Int // Negative = below target, Positive = above target with waste considered
+
+  stockMutations    StockMutation[] @relation(name: "StockMutationToProductionReport")
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
